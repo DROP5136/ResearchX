@@ -113,7 +113,7 @@ def score_source(
     }
 
 
-def enrich_source(source: Source, query: str) -> Source:
+def enrich_source(source: Source, query: str, *, preserve_type: bool = False) -> Source:
     scores = score_source(
         url=source.url,
         title=source.title,
@@ -122,6 +122,15 @@ def enrich_source(source: Source, query: str) -> Source:
         query=query,
         published_at=source.published_at,
     )
+    if source.domain == "local-pdf" or source.source_type == SourceType.PDF or preserve_type:
+        # Keep document sources as PDF; still refresh relevance/quality scores
+        source.authority_score = max(float(scores["authority_score"]), 0.7)
+        source.relevance_score = float(scores["relevance_score"])
+        source.quality_score = float(scores["quality_score"])
+        source.is_primary = True
+        source.source_type = SourceType.PDF
+        source.domain = source.domain or "local-pdf"
+        return source
     source.source_type = scores["source_type"]  # type: ignore[assignment]
     source.authority_score = float(scores["authority_score"])
     source.relevance_score = float(scores["relevance_score"])

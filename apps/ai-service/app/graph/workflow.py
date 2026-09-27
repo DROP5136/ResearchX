@@ -112,21 +112,43 @@ class ResearchWorkflow:
             "pdf_document_ids": [],
             "meta": {},
         }
-        if query.pdf_paths:
+        if query.pdf_paths or query.document_ids or query.enable_document_research:
             try:
                 from app.rag.pipeline import DocumentRAGPipeline
 
                 rag = DocumentRAGPipeline(settings=self.settings)
-                pdf_sources = rag.ingest_and_retrieve(query.pdf_paths, query.query)
+                if query.pdf_paths:
+                    pdf_sources = rag.ingest_and_retrieve(
+                        query.pdf_paths,
+                        query.query,
+                        document_ids=query.document_ids or None,
+                    )
+                elif query.document_ids:
+                    pdf_sources = rag.retrieve_sources(
+                        query.query,
+                        document_ids=list(query.document_ids),
+                    )
+                else:
+                    pdf_sources = []
                 initial["sources"] = pdf_sources
-                initial["pdf_document_ids"] = [
-                    s.metadata.get("document_id", "") for s in pdf_sources if s.metadata
-                ]
-                self._emit(f"[Research] Ingested {len(pdf_sources)} PDF-derived sources")
+                initial["pdf_document_ids"] = list(
+                    dict.fromkeys(
+                        [
+                            *(query.document_ids or []),
+                            *[
+                                str(s.metadata.get("document_id") or "")
+                                for s in pdf_sources
+                                if s.metadata
+                            ],
+                        ]
+                    )
+                )
+                self._emit(f"[Research] Retrieved {len(pdf_sources)} document-derived sources")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("PDF RAG skipped: %s", exc)
                 initial["errors"] = [f"PDF RAG error: {exc}"]
 
+        # Skip web research agent work when disabled (keep PDF sources)
         result = self._graph.invoke(initial)
         return result  # type: ignore[return-value]
 
@@ -152,10 +174,21 @@ class ResearchWorkflow:
         self._emit("[2/7] Researching sources...")
 
         def _run():
-            tasks = list(state.get("follow_up_tasks") or []) or list(state.get("tasks") or [])
-            query = state["query"].query
-            rid = state["research_id"]
             existing = list(state.get("sources") or [])
+            query_obj = state["query"]
+            if not getattr(query_obj, "enable_web_search", True):
+                self._emit("[Research] Web search disabled — using document sources only")
+                return {
+                    "sources": existing[: self.settings.max_sources],
+                    "follow_up_tasks": [],
+                    "status": PipelineStatus.RESEARCHING,
+                    "progress": (state.get("progress") or []) + ["research_done"],
+                    "meta": dict(state.get("meta") or {}),
+                }
+
+            tasks = list(state.get("follow_up_tasks") or []) or list(state.get("tasks") or [])
+            query = query_obj.query
+            rid = state["research_id"]
             all_sources: list[Source] = []
             max_workers = min(self.settings.max_concurrent_agents, max(1, len(tasks)))
 
@@ -172,6 +205,12 @@ class ResearchWorkflow:
                         all_sources.extend(fut.result())
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Parallel research task failed: %s", exc)
+
+            # Tag web sources
+            for s in all_sources:
+                if not s.metadata:
+                    s.metadata = {}
+                s.metadata.setdefault("source_kind", "web")
 
             merged = self._dedupe_sources(existing + all_sources)
             merged.sort(key=lambda s: s.quality_score, reverse=True)

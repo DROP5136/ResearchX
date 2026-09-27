@@ -161,39 +161,14 @@ export function ResearchResultsPage() {
       )}
 
       {tab === "Sources" && (
-        <div className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-            <input className="rx-input pl-9" placeholder="Filter sources…" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} />
-          </div>
-          {filteredSources.length === 0 ? (
-            <EmptyState title="No sources" description="No sources matched this filter." />
-          ) : (
-            <div className="space-y-3">
-              {filteredSources.map((s) => (
-                <article key={s.source_id} className={cn("rx-panel p-4", highlightSource === s.source_id && "ring-2 ring-accent/40")}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{s.title || s.source_id}</h3>
-                      <p className="mt-1 text-sm text-ink-500">{s.domain || "unknown domain"} · {s.source_type || "source"} · {s.published_at || "n/d"}</p>
-                      <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">{s.snippet}</p>
-                      <p className="mt-2 font-mono text-xs text-ink-400">
-                        {s.source_id}
-                        {s.relevance_score != null ? ` · relevance ${s.relevance_score.toFixed(2)}` : ""}
-                        {s.quality_score != null ? ` · quality ${s.quality_score.toFixed(2)}` : ""}
-                      </p>
-                    </div>
-                    {s.url ? (
-                      <a className="rx-btn-secondary" href={s.url} target="_blank" rel="noreferrer">
-                        <ExternalLink className="h-4 w-4" /> Open
-                      </a>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
+        <SourcesTab
+          sources={filteredSources}
+          sourceFilter={sourceFilter}
+          setSourceFilter={setSourceFilter}
+          highlightSource={highlightSource}
+          setHighlightSource={setHighlightSource}
+          claims={claims}
+        />
       )}
 
       {tab === "Claims" && (
@@ -285,6 +260,126 @@ export function ResearchResultsPage() {
           <Section title="Pipeline notes" body={`Stage: ${stageLabel(research.currentStage)}\nProgress: ${research.progress}%\nFastAPI id: ${research.fastApiResearchId}\nStatus note: ${report?.status_note || "—"}`} />
         </div>
       )}
+    </div>
+  );
+}
+
+function isDocumentSource(s: Source) {
+  return (
+    s.source_type === "pdf" ||
+    s.domain === "local-pdf" ||
+    s.metadata?.source_kind === "document" ||
+    Boolean(s.metadata?.document_id)
+  );
+}
+
+function SourcesTab({
+  sources,
+  sourceFilter,
+  setSourceFilter,
+  highlightSource,
+  setHighlightSource,
+  claims,
+}: {
+  sources: Source[];
+  sourceFilter: string;
+  setSourceFilter: (v: string) => void;
+  highlightSource: string | null;
+  setHighlightSource: (v: string | null) => void;
+  claims: Claim[];
+}) {
+  const [panel, setPanel] = useState<Source | null>(null);
+  const docs = sources.filter(isDocumentSource);
+  const web = sources.filter((s) => !isDocumentSource(s));
+
+  function renderCard(s: Source, kind: "web" | "document") {
+    const supported = claims.filter((c) => (c.source_ids || []).includes(s.source_id));
+    return (
+      <article key={s.source_id} className={cn("rx-panel p-4", highlightSource === s.source_id && "ring-2 ring-accent/40")}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-400">
+              {kind === "document" ? "Document" : "Web"}
+            </p>
+            <h3 className="mt-1 font-semibold">{s.title || s.source_id}</h3>
+            {kind === "document" ? (
+              <p className="mt-1 text-sm text-ink-500">
+                {String(s.metadata?.filename || s.title || "PDF")}
+                {s.metadata?.page != null ? ` · p. ${s.metadata.page}` : ""}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-ink-500">
+                {s.domain || "unknown domain"} · {s.source_type || "source"} · {s.published_at || "n/d"}
+              </p>
+            )}
+            <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">{s.snippet}</p>
+            {supported.length ? (
+              <p className="mt-2 text-xs text-ink-500">Supports {supported.length} claim(s)</p>
+            ) : null}
+            <p className="mt-2 font-mono text-xs text-ink-400">
+              {s.source_id}
+              {s.relevance_score != null ? ` · relevance ${s.relevance_score.toFixed(2)}` : ""}
+              {s.quality_score != null ? ` · quality ${s.quality_score.toFixed(2)}` : ""}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {kind === "document" ? (
+              <button type="button" className="rx-btn-secondary" onClick={() => { setPanel(s); setHighlightSource(s.source_id); }}>
+                View excerpt
+              </button>
+            ) : s.url ? (
+              <a className="rx-btn-secondary" href={s.url} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4" /> Open
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+        <input className="rx-input pl-9" placeholder="Filter sources…" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} />
+      </div>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-xl">Web Sources</h2>
+        {web.length === 0 ? <EmptyState title="No web sources" /> : web.map((s) => renderCard(s, "web"))}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-xl">Documents</h2>
+        {docs.length === 0 ? (
+          <EmptyState title="No document sources" description="Enable uploaded documents on the next research run." />
+        ) : (
+          docs.map((s) => renderCard(s, "document"))
+        )}
+      </section>
+
+      {panel ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal="true">
+          <div className="rx-panel max-h-[80vh] w-full max-w-lg overflow-y-auto p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Document citation</p>
+                <h3 className="mt-1 font-display text-2xl">{String(panel.metadata?.filename || panel.title)}</h3>
+                <p className="mt-1 text-sm text-ink-500">
+                  {panel.metadata?.page != null ? `Page ${panel.metadata.page}` : "Page n/a"}
+                  {panel.metadata?.citation ? ` · ${panel.metadata.citation}` : ""}
+                </p>
+              </div>
+              <button type="button" className="rx-btn-secondary" onClick={() => setPanel(null)}>Close</button>
+            </div>
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ink-700 dark:text-ink-200">
+              {panel.snippet || panel.metadata?.citation || "No excerpt available."}
+            </p>
+            <p className="mt-3 font-mono text-xs text-ink-400">{panel.source_id}</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

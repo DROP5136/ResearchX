@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
-from app.api.routes import evaluation, health, research
+from app.api.routes import documents, evaluation, health, research
 from app.config import get_settings
 from app.utils.logging import setup_logging
 
@@ -52,6 +52,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(research.router)
+    app.include_router(documents.router)
     app.include_router(evaluation.router)
     return app
 

@@ -50,9 +50,42 @@ class VectorStore:
         coll = self._ensure()
         coll.upsert(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
 
-    def query(self, embedding: list[float], n_results: int = 5) -> dict[str, Any]:
+    def query(
+        self,
+        embedding: list[float],
+        n_results: int = 5,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         coll = self._ensure()
-        return coll.query(query_embeddings=[embedding], n_results=n_results)
+        kwargs: dict[str, Any] = {
+            "query_embeddings": [embedding],
+            "n_results": n_results,
+        }
+        if where:
+            kwargs["where"] = where
+        return coll.query(**kwargs)
 
     def count(self) -> int:
         return int(self._ensure().count())
+
+    def count_for_document(self, document_id: str) -> int:
+        """Return number of chunks already indexed for a document_id."""
+        coll = self._ensure()
+        try:
+            result = coll.get(where={"document_id": document_id}, include=[])
+            return len(result.get("ids") or [])
+        except Exception:  # noqa: BLE001
+            return 0
+
+    def delete_document(self, document_id: str) -> int:
+        """Delete all chunks for a document. Returns deleted count (best-effort)."""
+        coll = self._ensure()
+        try:
+            existing = coll.get(where={"document_id": document_id}, include=[])
+            ids = existing.get("ids") or []
+            if ids:
+                coll.delete(ids=ids)
+            return len(ids)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to delete document %s from vector store: %s", document_id, exc)
+            return 0

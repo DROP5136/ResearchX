@@ -6,6 +6,8 @@ import { corsOriginList, env } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import authRoutes from "./routes/auth";
 import projectRoutes from "./routes/projects";
+import projectDocumentRoutes from "./routes/projectDocuments";
+import documentRoutes from "./routes/documents";
 import researchRoutes from "./routes/research";
 import savedReportRoutes from "./routes/savedReports";
 import evaluationRoutes from "./routes/evaluation";
@@ -44,6 +46,8 @@ export function createApp() {
 
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/projects", projectRoutes);
+  app.use("/api/v1/projects/:projectId/documents", projectDocumentRoutes);
+  app.use("/api/v1/documents", documentRoutes);
   app.use("/api/v1/research", researchRoutes);
   app.use("/api/v1/saved-reports", savedReportRoutes);
   app.use("/api/v1/evaluation", evaluationRoutes);

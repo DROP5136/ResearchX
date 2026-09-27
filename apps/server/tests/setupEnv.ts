@@ -7,3 +7,7 @@ process.env.FASTAPI_URL = "http://127.0.0.1:8000";
 process.env.CORS_ORIGIN = "http://localhost:5173";
 process.env.RATE_LIMIT_WINDOW_MS = "900000";
 process.env.RATE_LIMIT_MAX = "1000";
+process.env.DOCUMENTS_PATH =
+  process.env.DOCUMENTS_PATH || require("path").join(require("os").tmpdir(), "researchx-test-docs");
+process.env.MAX_UPLOAD_BYTES = "20971520";
+process.env.MAX_DOCS_PER_PROJECT = "20";

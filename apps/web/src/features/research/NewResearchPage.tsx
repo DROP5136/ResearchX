@@ -1,16 +1,17 @@
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { listProjects } from "@/features/projects/api";
+import { listDocuments } from "@/features/projects/documentsApi";
 import { startResearch } from "@/features/research/api";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 
 const EXAMPLES = [
   "Analyze the Indian EV market from 2022 to 2026 and compare Tata Motors, Mahindra and Hyundai.",
-  "Compare React and Vue for enterprise applications focusing on hiring and maintainability.",
+  "Compare the company's 2024 revenue in the uploaded annual report with industry growth online.",
   "What is the impact of AI on software engineering jobs?",
 ];
 
@@ -22,9 +23,28 @@ export function NewResearchPage() {
   const [query, setQuery] = useState("");
   const [enableWeb, setEnableWeb] = useState(true);
   const [enablePdf, setEnablePdf] = useState(false);
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [enableAnalysis, setEnableAnalysis] = useState(true);
   const [mockMode, setMockMode] = useState(true);
   const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
+
+  const projects = projectsQ.data?.items || [];
+  const selected = projectId || projects[0]?.id || "";
+
+  const docsQ = useQuery({
+    queryKey: ["documents", selected],
+    queryFn: () => listDocuments(selected),
+    enabled: Boolean(selected) && enablePdf,
+  });
+
+  const readyDocs = useMemo(
+    () => (docsQ.data?.items || []).filter((d) => d.status === "ready"),
+    [docsQ.data]
+  );
+
+  useEffect(() => {
+    if (!enablePdf) setSelectedDocs([]);
+  }, [enablePdf]);
 
   const mutation = useMutation({
     mutationFn: startResearch,
@@ -39,7 +59,6 @@ export function NewResearchPage() {
   if (projectsQ.isLoading) return <LoadingState />;
   if (projectsQ.isError) return <ErrorState onRetry={() => void projectsQ.refetch()} />;
 
-  const projects = projectsQ.data?.items || [];
   if (projects.length === 0) {
     return (
       <EmptyState
@@ -50,7 +69,9 @@ export function NewResearchPage() {
     );
   }
 
-  const selected = projectId || projects[0].id;
+  function toggleDoc(id: string) {
+    setSelectedDocs((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -59,14 +80,24 @@ export function NewResearchPage() {
       toast.error("Enter a research question (at least 3 characters)");
       return;
     }
+    if (!enableWeb && !enablePdf) {
+      toast.error("Enable web and/or uploaded documents");
+      return;
+    }
+    if (enablePdf && selectedDocs.length === 0) {
+      toast.error("Select at least one ready document, or turn off document research");
+      return;
+    }
     mutation.mutate({
       projectId: selected,
       query: q,
       depth,
       enableWebSearch: enableWeb,
       enablePdfRag: enablePdf,
+      enableDocumentResearch: enablePdf,
       enableAnalysis,
       mockMode,
+      documentIds: enablePdf ? selectedDocs : [],
     });
   }
 
@@ -78,7 +109,7 @@ export function NewResearchPage() {
           What do you want to research?
         </h1>
         <p className="mt-2 text-ink-500">
-          ResearchX plans subtasks, gathers sources, extracts evidence, checks conflicts, and writes a citation-grounded report.
+          Combine web sources and uploaded PDFs into a citation-grounded report.
         </p>
       </div>
 
@@ -88,7 +119,7 @@ export function NewResearchPage() {
           <textarea
             id="query"
             className="rx-input min-h-[140px] resize-y font-display text-lg leading-relaxed"
-            placeholder="Analyze the Indian EV market from 2022 to 2026 and compare Tata Motors, Mahindra and Hyundai."
+            placeholder="Compare the company's 2024 revenue with industry growth."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={2000}
@@ -116,10 +147,54 @@ export function NewResearchPage() {
           </div>
         </div>
 
+        <fieldset className="space-y-3">
+          <legend className="rx-label">Research sources</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Toggle label="Web" checked={enableWeb} onChange={setEnableWeb} />
+            <Toggle label="Uploaded documents" checked={enablePdf} onChange={setEnablePdf} />
+          </div>
+
+          {enablePdf ? (
+            <div className="rounded-xl border border-ink-200/80 p-4 dark:border-ink-700">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-ink-800 dark:text-ink-100">Document selector</p>
+                <Link className="text-xs text-accent underline" to="/documents">Manage uploads</Link>
+              </div>
+              {docsQ.isLoading ? (
+                <p className="text-sm text-ink-500">Loading documents…</p>
+              ) : readyDocs.length === 0 ? (
+                <p className="text-sm text-ink-500">
+                  No ready PDFs in this project.{" "}
+                  <Link className="text-accent underline" to="/documents">Upload documents</Link>
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {readyDocs.map((d) => (
+                    <li key={d.id}>
+                      <label className="flex cursor-pointer items-start gap-3 text-sm">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 accent-teal-700"
+                          checked={selectedDocs.includes(d.id)}
+                          onChange={() => toggleDoc(d.id)}
+                        />
+                        <span>
+                          <span className="font-medium text-ink-900 dark:text-white">{d.originalFilename}</span>
+                          <span className="block text-xs text-ink-500">
+                            {d.pageCount != null ? `${d.pageCount} pages` : "Ready"}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </fieldset>
+
         <fieldset className="grid gap-3 sm:grid-cols-2">
           <legend className="rx-label">Options</legend>
-          <Toggle label="Enable web research" checked={enableWeb} onChange={setEnableWeb} />
-          <Toggle label="Enable document research (PDF RAG)" checked={enablePdf} onChange={setEnablePdf} />
           <Toggle label="Enable quantitative analysis" checked={enableAnalysis} onChange={setEnableAnalysis} />
           <Toggle label="Mock mode (offline / no paid APIs)" checked={mockMode} onChange={setMockMode} />
         </fieldset>

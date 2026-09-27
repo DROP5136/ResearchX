@@ -20,13 +20,19 @@ class ResearchCreateRequest(BaseModel):
     max_iterations: int | None = Field(default=None, ge=0, le=5)
     enable_web_search: bool = True
     enable_pdf_rag: bool = False
+    enable_document_research: bool = False
     enable_analysis: bool = True
     mock_mode: bool | None = None
     requirements: list[str] = Field(default_factory=list, max_length=20)
     pdf_paths: list[str] = Field(
         default_factory=list,
         max_length=10,
-        description="Optional local PDF paths for hybrid RAG (only used when enable_pdf_rag=true)",
+        description="Optional local PDF paths for hybrid RAG",
+    )
+    document_ids: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Stable document IDs already indexed via /api/v1/documents/process",
     )
 
     @field_validator("query")
@@ -89,6 +95,7 @@ class SourceOut(BaseModel):
     quality_score: float | None = None
     authority_score: float | None = None
     snippet: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ClaimOut(BaseModel):

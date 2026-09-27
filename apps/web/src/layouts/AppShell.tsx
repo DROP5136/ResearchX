@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   Bookmark,
+  FileText,
   FolderKanban,
   LayoutDashboard,
   LogOut,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/projects", label: "Projects", icon: FolderKanban },
+  { to: "/documents", label: "Documents", icon: FileText },
   { to: "/research/new", label: "Research", icon: Search },
   { to: "/saved-reports", label: "Saved Reports", icon: Bookmark },
   { to: "/evaluation", label: "Evaluation", icon: BarChart3 },

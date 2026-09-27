@@ -27,6 +27,19 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
 
+  // Multer file size / unexpected field
+  if (typeof err === "object" && err && "code" in err) {
+    const code = String((err as { code: string }).code || "");
+    if (code === "LIMIT_FILE_SIZE") {
+      res.status(400).json({ error: { code: "FILE_TOO_LARGE", message: "Uploaded file is too large" } });
+      return;
+    }
+    if (code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE") {
+      res.status(400).json({ error: { code: "UPLOAD_LIMIT", message: "Too many files or unexpected field" } });
+      return;
+    }
+  }
+
   console.error("[researchx-server] Unhandled error:", err instanceof Error ? err.message : err);
   res.status(500).json({
     error: { code: "INTERNAL_ERROR", message: "An unexpected server error occurred" },

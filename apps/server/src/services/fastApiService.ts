@@ -8,9 +8,12 @@ export interface FastApiStartRequest {
   max_iterations?: number | null;
   enable_web_search?: boolean;
   enable_pdf_rag?: boolean;
+  enable_document_research?: boolean;
   enable_analysis?: boolean;
   mock_mode?: boolean | null;
   requirements?: string[];
+  pdf_paths?: string[];
+  document_ids?: string[];
 }
 
 export interface FastApiStartResponse {
@@ -166,6 +169,40 @@ export class FastApiService {
       return data;
     } catch (err) {
       throw mapAxiosError(err, "FASTAPI_HEALTH_FAILED");
+    }
+  }
+
+  async processDocument(payload: {
+    path: string;
+    document_id: string;
+    original_filename?: string;
+    force?: boolean;
+  }): Promise<{
+    document_id: string;
+    status: string;
+    page_count: number;
+    chunk_count: number;
+    skipped_reembed: boolean;
+    stage: string;
+  }> {
+    try {
+      const { data } = await this.client.post("/api/v1/documents/process", payload, {
+        timeout: 120_000,
+      });
+      return data;
+    } catch (err) {
+      throw mapAxiosError(err, "FASTAPI_DOCUMENT_PROCESS_FAILED");
+    }
+  }
+
+  async deleteDocument(documentId: string): Promise<unknown> {
+    try {
+      const { data } = await this.client.post("/api/v1/documents/delete", {
+        document_id: documentId,
+      });
+      return data;
+    } catch (err) {
+      throw mapAxiosError(err, "FASTAPI_DOCUMENT_DELETE_FAILED");
     }
   }
 }

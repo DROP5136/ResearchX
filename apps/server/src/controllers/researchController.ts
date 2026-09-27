@@ -116,9 +116,11 @@ export async function startResearch(req: AuthRequest, res: Response, next: NextF
       maxIterations?: number;
       enableWebSearch?: boolean;
       enablePdfRag?: boolean;
+      enableDocumentResearch?: boolean;
       enableAnalysis?: boolean;
       mockMode?: boolean;
       requirements?: string[];
+      documentIds?: string[];
     };
 
     const project = await Project.findOne({
@@ -129,15 +131,48 @@ export async function startResearch(req: AuthRequest, res: Response, next: NextF
       throw new AppError("PROJECT_NOT_FOUND", "Project not found", 404);
     }
 
+    const enableDocs =
+      Boolean(body.enablePdfRag) ||
+      Boolean(body.enableDocumentResearch) ||
+      (body.documentIds?.length ?? 0) > 0;
+
+    let pdfPaths: string[] = [];
+    let documentIds: string[] = [];
+
+    if (enableDocs && body.documentIds?.length) {
+      const { Document } = await import("../models/Document");
+      const docs = await Document.find({
+        _id: { $in: body.documentIds },
+        userId: req.userId,
+        projectId: body.projectId,
+      });
+      if (docs.length !== body.documentIds.length) {
+        throw new AppError("DOCUMENT_NOT_FOUND", "One or more documents were not found in this project", 404);
+      }
+      const notReady = docs.filter((d) => d.status !== "ready");
+      if (notReady.length) {
+        throw new AppError(
+          "DOCUMENT_NOT_READY",
+          `Documents still processing: ${notReady.map((d) => d.originalFilename).join(", ")}`,
+          409
+        );
+      }
+      pdfPaths = docs.map((d) => d.absolutePath);
+      documentIds = docs.map((d) => String(d._id));
+    }
+
     const started = await fastApiService.startResearch({
       query: body.query,
       depth: body.depth || "standard",
       max_iterations: body.maxIterations ?? null,
       enable_web_search: body.enableWebSearch ?? true,
-      enable_pdf_rag: body.enablePdfRag ?? false,
+      enable_pdf_rag: enableDocs,
+      enable_document_research: enableDocs,
       enable_analysis: body.enableAnalysis ?? true,
       mock_mode: body.mockMode ?? null,
       requirements: body.requirements || [],
+      pdf_paths: pdfPaths,
+      document_ids: documentIds,
     });
 
     const session = await ResearchSession.create({
@@ -151,6 +186,9 @@ export async function startResearch(req: AuthRequest, res: Response, next: NextF
       options: {
         depth: body.depth,
         mockMode: body.mockMode,
+        documentIds,
+        enableWebSearch: body.enableWebSearch,
+        enableDocumentResearch: enableDocs,
       },
     });
 

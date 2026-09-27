@@ -14,17 +14,25 @@ logger = get_logger("researchx.tools.pdf")
 class DocumentParser:
     """Parse PDFs into page-level text with metadata."""
 
-    def parse_pdf(self, path: str | Path) -> dict[str, Any]:
+    def parse_pdf(self, path: str | Path, *, document_id: str | None = None) -> dict[str, Any]:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"PDF not found: {path}")
+        if path.suffix.lower() != ".pdf":
+            raise ValueError("Only PDF files are supported")
 
         try:
             import fitz  # PyMuPDF
         except ImportError as exc:
             raise RuntimeError("PyMuPDF (fitz) is not installed") from exc
 
-        doc_id = new_id("DOC")
+        # Basic magic-byte check (PDF header) — do not trust extension alone
+        with path.open("rb") as fh:
+            header = fh.read(5)
+        if header != b"%PDF-":
+            raise ValueError("File does not appear to be a valid PDF")
+
+        doc_id = (document_id or "").strip() or new_id("DOC")
         pages: list[dict[str, Any]] = []
         with fitz.open(path) as doc:
             for i, page in enumerate(doc):

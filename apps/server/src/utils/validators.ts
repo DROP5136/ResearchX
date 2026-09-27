@@ -33,17 +33,27 @@ export const idParamSchema = z.object({
   id: objectIdSchema,
 });
 
-export const researchCreateSchema = z.object({
+export const projectIdParamSchema = z.object({
   projectId: objectIdSchema,
-  query: z.string().trim().min(3).max(2000),
-  depth: z.enum(["quick", "standard", "deep"]).optional().default("standard"),
-  maxIterations: z.number().int().min(0).max(5).optional(),
-  enableWebSearch: z.boolean().optional().default(true),
-  enablePdfRag: z.boolean().optional().default(false),
-  enableAnalysis: z.boolean().optional().default(true),
-  mockMode: z.boolean().optional(),
-  requirements: z.array(z.string().max(500)).max(20).optional().default([]),
 });
+
+export const researchCreateSchema = z
+  .object({
+    projectId: objectIdSchema,
+    query: z.string().trim().min(3).max(2000),
+    depth: z.enum(["quick", "standard", "deep"]).optional().default("standard"),
+    maxIterations: z.number().int().min(0).max(5).optional(),
+    enableWebSearch: z.boolean().optional().default(true),
+    enablePdfRag: z.boolean().optional().default(false),
+    enableDocumentResearch: z.boolean().optional().default(false),
+    enableAnalysis: z.boolean().optional().default(true),
+    mockMode: z.boolean().optional(),
+    requirements: z.array(z.string().max(500)).max(20).optional().default([]),
+    documentIds: z.array(objectIdSchema).max(20).optional().default([]),
+  })
+  .refine((v) => v.enableWebSearch || v.enablePdfRag || v.enableDocumentResearch || (v.documentIds?.length ?? 0) > 0, {
+    message: "Enable web research and/or document research",
+  });
 
 export const researchListQuerySchema = z.object({
   projectId: objectIdSchema.optional(),

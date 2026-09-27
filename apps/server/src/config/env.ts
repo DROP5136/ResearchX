@@ -5,6 +5,9 @@ import { z } from "zod";
 // Always load apps/server/.env regardless of process cwd
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
+// Monorepo root: apps/server/src/config → ../../../../
+const REPO_ROOT = path.resolve(__dirname, "../../../../");
+
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
@@ -15,6 +18,11 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(200),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DOCUMENTS_PATH: z
+    .string()
+    .default(path.join(REPO_ROOT, "data", "documents")),
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(20 * 1024 * 1024),
+  MAX_DOCS_PER_PROJECT: z.coerce.number().int().positive().default(20),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -25,7 +33,12 @@ function loadEnv(): Env {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     throw new Error(`Invalid environment configuration: ${msg}`);
   }
-  return parsed.data;
+  const data = parsed.data;
+  // Resolve relative DOCUMENTS_PATH against repo root
+  if (!path.isAbsolute(data.DOCUMENTS_PATH)) {
+    data.DOCUMENTS_PATH = path.resolve(REPO_ROOT, data.DOCUMENTS_PATH);
+  }
+  return data;
 }
 
 export const env = loadEnv();

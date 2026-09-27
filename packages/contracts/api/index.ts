@@ -70,6 +70,15 @@ export type Source = {
   quality_score?: number;
   authority_score?: number;
   snippet?: string;
+  metadata?: {
+    source_kind?: string;
+    document_id?: string;
+    page?: number;
+    chunk_id?: string;
+    filename?: string;
+    citation?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type Claim = {

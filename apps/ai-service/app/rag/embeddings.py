@@ -31,7 +31,7 @@ class EmbeddingModel:
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         model = self._ensure()
-        return [list(vec) for vec in model.embed(list(texts))]
+        return [[float(x) for x in vec] for vec in model.embed(list(texts))]
 
     def embed_query(self, text: str) -> list[float]:
         return self.embed([text])[0]

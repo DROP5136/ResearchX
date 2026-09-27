@@ -170,8 +170,16 @@ See `docs/deployment/README.md`. Typical production layout: separate containers 
 
 - [Architecture overview](docs/architecture/overview.md)
 - [AI pipeline](docs/architecture/ai-pipeline.md)
+- [Document / PDF RAG](docs/architecture/document-rag.md)
 - [System flow](docs/architecture/system-flow.md)
 - [API](docs/api/README.md)
 - [Setup](docs/development/setup.md)
 - [Testing](docs/development/testing.md)
 - [PRD](PRD.md)
+
+## Document research (PDF RAG)
+
+1. Open **Documents**, pick a project, upload PDFs.
+2. Wait until status is **Ready** (parsing → embedding → indexing).
+3. Start **Research**, enable **Uploaded documents**, select files (and optionally Web).
+4. In results, the **Sources** tab separates web vs document citations (page + excerpt).

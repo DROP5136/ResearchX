@@ -8,6 +8,7 @@ import { NewResearchPage } from "@/features/research/NewResearchPage";
 import { ProjectsPage } from "@/features/projects/ProjectsPage";
 import { ResearchProgressPage } from "@/features/research/ResearchProgressPage";
 import { ResearchResultsPage } from "@/features/research/ResearchResultsPage";
+import { DocumentsPage } from "@/features/projects/DocumentsPage";
 import { SavedReportsPage } from "@/features/reports/SavedReportsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
@@ -21,6 +22,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/research/new" element={<NewResearchPage />} />
           <Route path="/research/:id/progress" element={<ResearchProgressPage />} />
           <Route path="/research/:id" element={<ResearchResultsPage />} />

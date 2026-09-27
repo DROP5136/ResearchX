@@ -10,6 +10,32 @@ Auth header for protected routes:
 Authorization: Bearer <jwt>
 ```
 
+## Documents (PDF)
+
+### POST `/api/v1/projects/:projectId/documents`
+
+Multipart form field: `files` (one or more PDFs).
+
+Returns `202` with `{ documentId, status: "processing", items: [...] }`.
+
+### GET `/api/v1/projects/:projectId/documents`
+
+List project documents (metadata only).
+
+### GET `/api/v1/documents/:id/status`
+
+Processing status (`uploaded` | `processing` | `ready` | `failed`) and stage.
+
+### POST `/api/v1/documents/:id/retry`
+
+### DELETE `/api/v1/documents/:id`
+
+### Research with documents
+
+`POST /api/v1/research` accepts `documentIds[]`, `enableDocumentResearch` / `enablePdfRag`, and `enableWebSearch`.
+
+---
+
 Error envelope:
 
 ```json

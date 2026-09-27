@@ -29,6 +29,9 @@ class ResearchQuery(BaseModel):
     depth: ResearchDepth = ResearchDepth.STANDARD
     requirements: list[str] = Field(default_factory=list)
     pdf_paths: list[str] = Field(default_factory=list)
+    document_ids: list[str] = Field(default_factory=list)
+    enable_web_search: bool = True
+    enable_document_research: bool = False
 
 
 class ResearchTask(BaseModel):

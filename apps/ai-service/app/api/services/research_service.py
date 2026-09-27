@@ -73,10 +73,17 @@ def _sanitize_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _public_source(row: dict[str, Any]) -> dict[str, Any]:
+    meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    # Never expose absolute filesystem paths
+    safe_meta = {
+        k: v
+        for k, v in meta.items()
+        if k not in {"path"} and not (isinstance(v, str) and (":\\" in v or v.startswith("/")))
+    }
     return {
         "source_id": row.get("source_id", ""),
         "title": row.get("title", ""),
-        "url": row.get("url", ""),
+        "url": row.get("url", "") if not str(row.get("url", "")).startswith("file:") else "",
         "domain": row.get("domain", ""),
         "published_at": row.get("published_at"),
         "source_type": row.get("source_type"),
@@ -84,6 +91,7 @@ def _public_source(row: dict[str, Any]) -> dict[str, Any]:
         "quality_score": row.get("quality_score"),
         "authority_score": row.get("authority_score"),
         "snippet": (row.get("snippet") or "")[:500],
+        "metadata": safe_meta,
     }
 
 
@@ -134,11 +142,12 @@ class ResearchService:
             settings.llm_provider = "mock"
         if body.max_iterations is not None:
             settings.max_research_iterations = body.max_iterations
-        if not body.enable_web_search and not mock:
-            # Without web search outside mock mode, fall back to mock to avoid empty hangs
+        has_docs = bool(body.pdf_paths) or bool(body.document_ids) or body.enable_pdf_rag or body.enable_document_research
+        if not body.enable_web_search and not mock and not has_docs:
+            # Without web search or documents outside mock mode, fall back to mock
             settings.mock_mode = True
             settings.llm_provider = "mock"
-            logger.info("enable_web_search=false → forcing mock providers for this job")
+            logger.info("enable_web_search=false with no documents → forcing mock providers")
         return settings
 
     def _run_job(self, rid: str, body: ResearchCreateRequest) -> None:
@@ -152,7 +161,9 @@ class ResearchService:
             )
 
             settings = self._build_settings(body)
-            pdf_paths = body.pdf_paths if body.enable_pdf_rag else []
+            use_docs = body.enable_pdf_rag or body.enable_document_research or bool(body.pdf_paths) or bool(body.document_ids)
+            pdf_paths = list(body.pdf_paths) if use_docs else []
+            document_ids = list(body.document_ids) if use_docs else []
 
             def on_progress(msg: str) -> None:
                 stage, progress = _map_progress_message(msg)
@@ -173,6 +184,9 @@ class ResearchService:
                 depth=ResearchDepth(body.depth),
                 requirements=list(body.requirements or []),
                 pdf_paths=list(pdf_paths),
+                document_ids=list(document_ids),
+                enable_web_search=body.enable_web_search,
+                enable_document_research=use_docs,
             )
             state = workflow.run(query, research_id=rid)
 

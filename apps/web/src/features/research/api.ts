@@ -8,9 +8,11 @@ export type StartResearchInput = {
   maxIterations?: number;
   enableWebSearch?: boolean;
   enablePdfRag?: boolean;
+  enableDocumentResearch?: boolean;
   enableAnalysis?: boolean;
   mockMode?: boolean;
   requirements?: string[];
+  documentIds?: string[];
 };
 
 export function startResearch(input: StartResearchInput) {
