@@ -1,0 +1,1 @@
+"""ResearchX FastAPI application package."""
