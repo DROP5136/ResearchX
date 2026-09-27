@@ -1,11 +1,9 @@
 # Deployment
 
-See the free-first guide: **[docs/deployment.md](../deployment.md)**.
-
-Quick local stack:
+See **[docs/deployment.md](../deployment.md)**.
 
 ```bash
 docker compose up --build
 ```
 
-Do not expose MongoDB, Redis, or FastAPI publicly. Express + static web only.
+Do not expose MongoDB, Redis, or FastAPI publicly.

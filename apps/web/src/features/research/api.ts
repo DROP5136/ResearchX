@@ -70,8 +70,8 @@ export type ResearchProgressEvent = {
 };
 
 /**
- * Subscribe to SSE research progress (Authorization via fetch — EventSource cannot set headers).
- * Falls back gracefully; callers should still poll if the stream errors.
+ * Subscribe to research progress over SSE (Authorization via fetch).
+ * Falls back to polling if the stream errors.
  */
 export function subscribeResearchEvents(
   id: string,

@@ -1,13 +1,11 @@
 # Testing
 
-## Commands
-
 ```powershell
-# Python AI service (+ FastAPI integration)
+# Python
 cd apps\ai-service
 ..\..\.venv\Scripts\python.exe -m pytest -q
 
-# Express (includes e2e.smoke.test.ts — primary product regression)
+# Express
 npm run test -w researchx-server
 npm run lint -w researchx-server
 
@@ -16,43 +14,34 @@ npm run test -w researchx-web
 npm run lint -w researchx-web
 npm run build -w researchx-web
 
-# Evaluation / performance (mock)
+# Evaluation (mock)
 cd apps\ai-service
 ..\..\.venv\Scripts\python.exe -m app.evaluation.run --mock
 ```
 
-## Primary smoke test
+## Smoke test
 
-`apps/server/tests/e2e.smoke.test.ts` covers:
+`apps/server/tests/e2e.smoke.test.ts` covers register → project → research job → progress → report (FastAPI mocked).
 
-register/login → project → research job (202) → status progress → completed report
-(sources, claims, evidence, analysis, charts) → ownership isolation
+LangGraph mock flow: `apps/ai-service/tests/integration/test_api.py`.
 
-FastAPI is mocked; Python suite covers LangGraph mock end-to-end in `tests/integration/test_api.py`.
+## Useful test files
 
-## Coverage map
-
-| Area | Tests |
-|------|--------|
+| Area | Location |
+|------|----------|
 | Redis optional | `test_redis_optional.py`, `jobs.test.ts` |
-| Job lifecycle / cancel | `test_job_lifecycle.py`, `test_cancel_job.py`, `jobs.test.ts` |
-| SSE progress | `jobs.test.ts` |
-| Auth / ownership | `security.test.ts`, `e2e.smoke.test.ts` |
+| Jobs / cancel / SSE | `test_job_lifecycle.py`, `test_cancel_job.py`, `jobs.test.ts` |
+| Auth / ownership | `security.test.ts` |
 | PDF RAG | `test_document_rag.py`, `test_documents_api.py` |
-| Quantitative | `test_quantitative.py`, `test_analysis.py` |
-| Mock full research | `test_api.py`, `e2e.smoke.test.ts` |
+| Numbers | `test_quantitative.py` |
 
-## Docker Compose smoke
-
-Requires Docker Desktop running:
+## Docker smoke
 
 ```powershell
 docker compose up --build -d
 curl http://127.0.0.1:5000/health
 curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:5000/ready
-# open http://127.0.0.1:5173 — register, start mock research
 docker compose down
 ```
 
-**Document paths:** Express and AI service both use absolute `DOCUMENTS_PATH=/data/documents` with the same volume mount so PDF RAG works in Compose.
+In Compose, Express and AI both use `DOCUMENTS_PATH=/data/documents` on the same volume.

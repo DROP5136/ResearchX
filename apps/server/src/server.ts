@@ -5,8 +5,9 @@ import { env } from "./config/env";
 async function main() {
   await connectMongo();
   const app = createApp();
-  app.listen(env.PORT, () => {
-    console.log(`ResearchX server listening on http://127.0.0.1:${env.PORT}`);
+  const host = env.HOST || "0.0.0.0";
+  app.listen(env.PORT, host, () => {
+    console.log(`ResearchX server listening on ${host}:${env.PORT}`);
   });
 }
 

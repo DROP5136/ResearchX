@@ -1,6 +1,5 @@
 /**
- * Primary Express smoke test: auth → project → research job → progress → final report.
- * FastAPI is mocked; contracts match production Express responses.
+ * End-to-end smoke: auth → project → research → report (FastAPI mocked).
  */
 import request from "supertest";
 import { createApp } from "../src/app";
@@ -87,7 +86,7 @@ jest.mock("../src/services/fastApiService", () => ({
 
 const app = createApp();
 
-describe("E2E smoke — auth to final report", () => {
+describe("E2E smoke", () => {
   beforeAll(async () => {
     await setupTestDb();
   });
@@ -100,13 +99,11 @@ describe("E2E smoke — auth to final report", () => {
     await clearDb();
   });
 
-  it("completes the full mock research product path", async () => {
-    // health
+  it("completes mock research end-to-end", async () => {
     const health = await request(app).get("/health");
     expect(health.status).toBe(200);
     expect(health.body.status).toBe("ok");
 
-    // register + login
     const email = `smoke${Date.now()}@example.com`;
     const reg = await request(app).post("/api/v1/auth/register").send({
       name: "Smoke User",
@@ -124,7 +121,6 @@ describe("E2E smoke — auth to final report", () => {
     expect(login.status).toBe(200);
     expect(login.body.token).toBeTruthy();
 
-    // project
     const project = await request(app)
       .post("/api/v1/projects")
       .set("Authorization", `Bearer ${token}`)
@@ -132,7 +128,6 @@ describe("E2E smoke — auth to final report", () => {
     expect(project.status).toBe(201);
     const projectId = project.body.project.id as string;
 
-    // create research (background job — returns immediately)
     const started = await request(app)
       .post("/api/v1/research")
       .set("Authorization", `Bearer ${token}`)
@@ -147,7 +142,6 @@ describe("E2E smoke — auth to final report", () => {
     expect(started.body.research.projectId).toBe(projectId);
     const researchId = started.body.research.id as string;
 
-    // progress updates (HTTP request does not stay open for whole job)
     const mid = await request(app)
       .get(`/api/v1/research/${researchId}/status`)
       .set("Authorization", `Bearer ${token}`);
@@ -159,7 +153,6 @@ describe("E2E smoke — auth to final report", () => {
       .set("Authorization", `Bearer ${token}`);
     expect(later.status).toBe(200);
 
-    // final result persistence
     const result = await request(app)
       .get(`/api/v1/research/${researchId}`)
       .set("Authorization", `Bearer ${token}`);
@@ -178,11 +171,9 @@ describe("E2E smoke — auth to final report", () => {
     expect(Array.isArray(research.analysis)).toBe(true);
     expect(Array.isArray(research.charts)).toBe(true);
 
-    // claim ↔ evidence relationship preserved
     const claim = research.claims[0];
     expect(claim.evidence_ids || claim.evidenceIds).toBeTruthy();
 
-    // ownership isolation
     const other = await request(app).post("/api/v1/auth/register").send({
       name: "Other",
       email: `other${Date.now()}@example.com`,
@@ -193,7 +184,6 @@ describe("E2E smoke — auth to final report", () => {
       .set("Authorization", `Bearer ${other.body.token}`);
     expect(denied.status).toBe(404);
 
-    // no secrets in responses
     const blob = JSON.stringify(result.body).toLowerCase();
     expect(blob).not.toContain("jwt_secret");
     expect(blob).not.toContain("passwordhash");

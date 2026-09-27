@@ -1,8 +1,4 @@
-"""Optional Redis client for ResearchX AI service.
-
-Redis is never required. If REDIS_URL is unset or unreachable, callers
-receive None / False and must fall back to file/Mongo paths.
-"""
+"""Optional Redis client. Unset/unreachable REDIS_URL → callers get None/False."""
 
 from __future__ import annotations
 
@@ -23,7 +19,7 @@ _misses = 0
 
 
 def reset_redis_state() -> None:
-    """Test helper: clear cached client state."""
+    """Clear cached client state (tests)."""
     global _client, _disabled, _hits, _misses
     with _lock:
         if _client is not None:
@@ -43,7 +39,7 @@ def redis_enabled() -> bool:
 
 
 def get_redis():
-    """Return a Redis client or None when unavailable."""
+    """Return a Redis client or None."""
     global _client, _disabled
     if not redis_enabled() and not (get_settings().redis_url or "").strip():
         return None
@@ -71,7 +67,7 @@ def get_redis():
         except Exception as exc:  # noqa: BLE001
             _disabled = True
             _client = None
-            logger.warning("Redis unavailable; continuing without cache (%s)", type(exc).__name__)
+            logger.warning("Redis unavailable (%s)", type(exc).__name__)
             return None
 
 
@@ -125,7 +121,6 @@ def job_progress_key(research_id: str) -> str:
 
 
 def set_job_progress(research_id: str, payload: dict[str, Any], ttl_seconds: int = 7200) -> None:
-    """Short-lived job progress mirror (Mongo/files remain source of truth)."""
     cache_set(job_progress_key(research_id), payload, ttl_seconds=ttl_seconds)
 
 

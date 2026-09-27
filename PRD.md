@@ -1,36 +1,22 @@
-# ResearchX Product Requirements (Python Engine Scope)
+# ResearchX — Product Requirements
 
-This document captures the product specification used to implement the
-`researchx-ai` Python multi-agent research engine.
+Scope for the Python multi-agent research engine and related app services.
 
-## Phase 1 (complete)
-- Multi-agent pipeline: Planner → Research → Extract → Fact Check → Analyst → Writer
-- Free/open LLM + search provider abstractions
-- Citation-grounded reports with local JSON storage
-- PDF RAG + hybrid research
-- Mock mode, pytest suite, and evaluation benchmarks
-- CLI-first delivery; no React/Node backend in this phase
+## Pipeline
 
-## Phase 2 (complete)
-- Strict Claim → Evidence → Source → URL grounding (invented claims rejected)
+Planner → Research → Evidence → Fact Check → Analyst → Writer
+
+## Requirements
+
+- Provider abstractions for LLM and search (including mock mode)
+- Citation-grounded reports stored locally (JSON) and via the app API
+- PDF RAG and hybrid web + document research
+- Claim grounding: Claim → Evidence → Source → URL
 - Verification statuses: supported / partially_supported / conflicting / unsupported
-- Structured ClaimSupportResult reviews
-- Evidence sufficiency decision + follow-up research tasks
-- Max-iteration termination with COMPLETED_WITH_LIMITATIONS
-- `evidence.json` in run outputs
-- Writer excludes unsupported claims; surfaces conflicting evidence
-- Observability logs: `[Planner]`, `[Research]`, `[Extraction]`, `[FactChecker]`, `[ResearchLoop]`, `[Analyst]`, `[Writer]`
+- Evidence sufficiency checks and follow-up research within max iterations
+- Deterministic quantitative analysis (YoY, CAGR, market share, rankings) without LLM arithmetic
+- Chart-ready JSON for the frontend
+- Pytest coverage and evaluation benchmarks
+- Express/React app for auth, projects, jobs, and report UI
 
-## Phase 3 — Quantitative analysis (complete)
-- DataPoint / Dataset / ChartData schemas with source/evidence traceability
-- Claim → DataPoint extraction + unit normalization (million/billion/%)
-- Deterministic Pandas engine: YoY, CAGR, market share, rankings, comparisons
-- Chart-ready JSON (line / bar / grouped_bar / pie / area)
-- Data-quality flags (duplicate, conflicting, outliers, div-by-zero)
-- Analyst skips non-numerical questions
-- CLI: `python main.py --demo-quant` and `--show-analysis`
-- Outputs: `datapoints.json`, `dataset.json`, enriched `analysis.json`
-
-See `README.md` for architecture, setup, and usage.
-
-
+See `README.md` for setup and usage.

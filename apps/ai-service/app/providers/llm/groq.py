@@ -1,4 +1,4 @@
-"""Groq free-tier LLM provider with multi-key rate-limit failover."""
+"""Groq LLM provider with multi-key failover on rate limits."""
 
 from __future__ import annotations
 

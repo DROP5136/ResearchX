@@ -9,7 +9,7 @@ import { mockModeAllowed } from "../config/env";
 import { AppError } from "../utils/errors";
 import { toObjectId } from "../utils/helpers";
 
-/** Canonical job statuses for API responses (lowercase). */
+/** Job status values returned by the API. */
 export type ResearchStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 function normalizeStatus(status: string | undefined | null): ResearchStatus {
@@ -247,7 +247,6 @@ export async function listResearch(req: AuthRequest, res: Response, next: NextFu
     if (projectId) filter.projectId = projectId;
     if (status) {
       const n = normalizeStatus(status);
-      // Include legacy "started" when filtering queued
       filter.status = n === "queued" ? { $in: ["queued", "started"] } : n;
     }
 
@@ -491,11 +490,10 @@ export async function cancelResearch(req: AuthRequest, res: Response, next: Next
       res.json({ research: serializeSession(session) });
       return;
     }
-    // Best-effort stop of FastAPI background job (Mongo remains source of truth for UI)
     try {
       await fastApiService.cancelResearch(session.fastApiResearchId);
     } catch {
-      /* FastAPI may be briefly unavailable; still mark Mongo cancelled */
+      /* ignore — Mongo cancel still applies */
     }
     session.status = "cancelled";
     session.currentStage = "cancelled";

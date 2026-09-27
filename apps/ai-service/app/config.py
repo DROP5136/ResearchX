@@ -8,12 +8,17 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# apps/ai-service/app → ai-service → apps → repo root
+# apps/ai-service/app → ai-service → (apps → repo) OR deploy root when rootDir=apps/ai-service
 APP_DIR = Path(__file__).resolve().parent
 AI_SERVICE_ROOT = APP_DIR.parent
-REPO_ROOT = AI_SERVICE_ROOT.parent.parent
+_monorepo_root = AI_SERVICE_ROOT.parent.parent
+if (_monorepo_root / "apps" / "ai-service").is_dir() or (_monorepo_root / "evaluation").is_dir():
+    REPO_ROOT = _monorepo_root
+else:
+    # Standalone PaaS deploy: treat the AI service folder as the root
+    REPO_ROOT = AI_SERVICE_ROOT
 
-# Data paths resolve against the monorepo root (data/ lives at repo root).
+# Data paths resolve against REPO_ROOT (monorepo or standalone).
 ROOT_DIR = REPO_ROOT
 
 _ENV_CANDIDATES = (
@@ -47,7 +52,7 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     serper_api_key: str = ""
 
-    # Pipeline limits (free-tier cost controls)
+    # Pipeline limits
     max_sources: int = 20
     max_research_iterations: int = 2
     max_concurrent_agents: int = 3
@@ -82,11 +87,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173"
     app_version: str = "0.1.0"
     app_env: str = "development"
-    # Shared secret for Express → FastAPI (empty = auth disabled, development only)
+    # Shared secret for Express → FastAPI (empty disables auth in development)
     ai_service_token: str = ""
-    # Max concurrent background research jobs in this process
     max_concurrent_research_jobs: int = 4
-    # Max PDF pages to parse
     max_pdf_pages: int = 200
     max_document_pages: int = 200
 

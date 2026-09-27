@@ -1,6 +1,5 @@
 /**
- * Optional Redis helpers for Express (progress cache).
- * REDIS_URL empty or unreachable → no-op; MongoDB remains source of truth.
+ * Optional Redis cache helpers. Empty/unreachable REDIS_URL → no-op.
  */
 
 import { env } from "../config/env";
@@ -39,9 +38,7 @@ async function connect(): Promise<RedisLike | null> {
         lazyConnect: true,
       }) as unknown as RedisLike;
 
-      c.on("error", () => {
-        /* swallow — optional dependency */
-      });
+      c.on("error", () => {});
 
       await c.connect();
       await c.ping();
@@ -112,7 +109,6 @@ export async function closeRedis(): Promise<void> {
   disabled = false;
 }
 
-/** Test helper */
 export function _resetRedisForTests(): void {
   client = null;
   disabled = false;

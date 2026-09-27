@@ -1,4 +1,4 @@
-"""Google Gemini free-tier LLM provider."""
+"""Google Gemini LLM provider."""
 
 from __future__ import annotations
 

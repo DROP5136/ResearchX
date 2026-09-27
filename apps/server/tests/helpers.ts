@@ -5,10 +5,7 @@ import { connectMongo, disconnectMongo } from "../src/config/db";
 let mongo: MongoMemoryServer | null = null;
 let usingMemory = false;
 
-/**
- * Prefer TEST_MONGODB_URI / local Mongo when reachable.
- * Otherwise use mongodb-memory-server (downloads binary on first use).
- */
+// Prefer a local Mongo URI when available; otherwise mongodb-memory-server.
 export async function setupTestDb(): Promise<void> {
   const preferMemory = ["1", "true", "yes"].includes(
     (process.env.USE_MEMORY_MONGO || "").toLowerCase()

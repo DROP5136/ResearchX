@@ -1,6 +1,5 @@
 /**
- * Free ResearchX dev ports (5000, 8000, 5173) before starting.
- * Windows + Unix.
+ * Free ports 5000, 8000, 5173 before starting the stack.
  */
 const { execSync } = require("child_process");
 const os = require("os");

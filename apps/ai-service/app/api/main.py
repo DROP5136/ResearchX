@@ -1,7 +1,10 @@
 """FastAPI entrypoint for ResearchX.
 
-Run (from apps/ai-service):
+Local:
   uvicorn app.api.main:app --reload --host 127.0.0.1 --port 8000
+
+Production:
+  python -m app.api.run_prod
 """
 
 from __future__ import annotations
@@ -39,11 +42,7 @@ def create_app() -> FastAPI:
     is_prod = (settings.app_env or "").lower() == "production"
     app = FastAPI(
         title="ResearchX API",
-        description=(
-            "HTTP API for the ResearchX multi-agent research pipeline. "
-            "This layer orchestrates the existing Python engine — it does not "
-            "duplicate research business logic."
-        ),
+        description="HTTP API for the ResearchX multi-agent research pipeline.",
         version=settings.app_version,
         lifespan=lifespan,
         docs_url=None if is_prod else "/docs",

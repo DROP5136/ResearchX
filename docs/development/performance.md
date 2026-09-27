@@ -1,35 +1,31 @@
 # Performance
 
-## Measured stages
+## Stages
 
-Research jobs record stage progress for:
+Planning → research → evidence → fact check → analysis → writing
 
-- planning → researching → evidence → fact checking → analysis → writing
+Progress is exposed via status / SSE (`progress`, `currentStage`, elapsed time).
 
-Express SSE / status polling expose `progress`, `currentStage`, and elapsed time.
+## Limits (env)
 
-## Concurrency controls (env)
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `MAX_CONCURRENT_RESEARCH` | 4 | Parallel background jobs per AI process |
-| `MAX_CONCURRENT_SEARCH` | 5 | Search fan-out bound |
-| `MAX_CONCURRENT_LLM_REQUESTS` / `MAX_CONCURRENT_AGENTS` | 4 / 3 | LLM / agent parallelism |
-| `MAX_SOURCES` | 20 | Cap retrieved sources |
-| `MAX_RESEARCH_ITERATIONS` | 2 | Iterative research loops |
-| `MAX_SEARCH_QUERIES` | 20 | Query budget |
-| `MAX_CHUNKS` / `MAX_CONTEXT_SIZE` / `MAX_LLM_CALLS` | 500 / 12k / 40 | RAG + LLM budgets |
-| `MAX_PDF_PAGES` / `MAX_DOCUMENT_PAGES` | 200 | Document parse cap |
+| Variable | Default |
+|----------|---------|
+| `MAX_CONCURRENT_RESEARCH` | 4 |
+| `MAX_CONCURRENT_SEARCH` | 5 |
+| `MAX_CONCURRENT_AGENTS` | 3 |
+| `MAX_SOURCES` | 20 |
+| `MAX_RESEARCH_ITERATIONS` | 2 |
+| `MAX_SEARCH_QUERIES` | 20 |
+| `MAX_CHUNKS` / `MAX_CONTEXT_SIZE` / `MAX_LLM_CALLS` | 500 / 12k / 40 |
+| `MAX_PDF_PAGES` | 200 |
 
 ## Caching
 
-1. File cache under `CACHE_PATH` (search HTML, search results).
-2. Optional Redis L1 mirror (same keys, TTL).
-3. Chroma embeddings reused per document id (skip re-embed when unchanged).
+File cache under `CACHE_PATH`, optional Redis mirror, Chroma embeddings reused per document id.
 
-## Design rules
+## Notes
 
-- Deterministic math / sorting / aggregation stays in Python.
-- LLMs used for planning, extraction, reasoning, synthesis, writing.
-- One failed optional source must not abort the whole job.
-- HTTP retries only for transient errors (429 / 5xx / timeout) via tenacity.
+- Math / sorting / aggregation stay in Python
+- LLMs are used for planning, extraction, reasoning, and writing
+- One failed optional source should not abort the whole run
+- Retries target transient HTTP errors (429 / 5xx / timeout)

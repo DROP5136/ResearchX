@@ -232,7 +232,7 @@ export async function deleteDocument(req: AuthRequest, res: Response, next: Next
     try {
       await fastApiService.deleteDocument(String(doc._id));
     } catch {
-      // Vector cleanup is best-effort
+      // ignore vector delete errors
     }
     await doc.deleteOne();
     res.json({ deleted: true });

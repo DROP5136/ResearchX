@@ -1,12 +1,8 @@
 # ResearchX
 
-Multi-agent AI research platform for free local demos and free-tier public deployment.
+Multi-agent research assistant: ask a question, get a sourced report with fact-checks, analysis, and optional PDF RAG.
 
-React → Express/MongoDB → FastAPI/LangGraph → sourced, fact-checked reports (optional PDF RAG).
-
-## Overview
-
-ResearchX turns a research question into a citation-grounded report with evidence, claims, contradiction detection, quantitative analysis, and charts. Designed as a B.Tech / final-year showcase that stays **free to build, run, and deploy**.
+**Stack:** React → Express + MongoDB → FastAPI + LangGraph
 
 ## Architecture
 
@@ -22,134 +18,91 @@ flowchart LR
   LG --> F[Fact check]
   LG --> A[Analyst]
   LG --> W[Writer]
-  Express -. optional .-> Redis[(Redis)]
-  AI -. optional .-> Redis
+  Express -.-> Redis[(Redis)]
+  AI -.-> Redis
 ```
 
-Details: [docs/architecture.md](docs/architecture.md)
+More detail: [docs/architecture.md](docs/architecture.md)
 
-## Major features
+## Features
 
 - Auth, projects, research sessions
-- Background research jobs + SSE progress
-- Web research, evidence, claims, citations, fact checking
-- Contradiction detection, iterative research
-- Quantitative analysis + charts
-- PDF/document RAG + hybrid web+document research
-- Evaluation/benchmarking, performance instrumentation
-- Security hardening (JWT, SSRF guards, AI service token, rate limits)
-- Optional Redis cache; Docker Compose local stack
+- Background jobs with live progress (SSE)
+- Web research, evidence, claims, citations, fact-checking
+- Contradiction detection and iterative research
+- Quantitative analysis and charts
+- PDF / document RAG (including hybrid web + docs)
+- Evaluation benchmarks
+- Optional Redis cache
+- Docker Compose for local full stack
 
-## Technology stack
+## Tech stack
 
-| Layer | Stack |
-|-------|--------|
+| Layer | Tech |
+|-------|------|
 | Web | React 18, TypeScript, Vite, Tailwind |
-| Server | Node.js, Express, Mongoose, JWT, optional ioredis |
-| AI | Python 3.11+, FastAPI, LangGraph, Chroma, FastEmbed |
-| Data | MongoDB (source of truth), optional Redis, local files |
-| Free providers | Mock / Ollama / Groq free tier / DuckDuckGo |
+| API | Node.js, Express, Mongoose, JWT |
+| AI | Python, FastAPI, LangGraph, Chroma, FastEmbed |
+| Data | MongoDB, optional Redis, local files |
+| Providers | Mock, Ollama, Groq, Gemini, DuckDuckGo |
 
-## Local setup
+## Setup
 
-### Prerequisites
-
-- Python 3.11+ (venv at repo `.venv/`)
-- Node.js 18+
-- MongoDB **or** Docker
-- Optional: Redis
-
-### Install
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-pip install -r apps/ai-service/requirements.txt
-npm install
-```
-
-### Environment
-
-```powershell
-copy .env.example .env
-# also configure apps/server/.env and apps/web/.env as needed
-```
-
-See `.env.example` for the full variable list. **Never commit secrets.**
-
-### Run (one command)
+**Needs:** Python 3.11+, Node 18+, MongoDB (or Docker). Redis optional.
 
 ```powershell
 cd "c:\GENAI PROJECT\researchx-ai"
+.\.venv\Scripts\Activate.ps1
+pip install -r apps\ai-service\requirements.txt
+npm install
+copy .env.example .env
+```
+
+Also keep `apps/server/.env` and `apps/web/.env` configured (see `.env.example`).
+
+## Run
+
+```powershell
 npm run dev
 ```
 
-This frees ports 5000/8000/5173, then starts AI + Express + Web together.
+Opens AI `:8000`, Express `:5000`, and web `:5173`. App: http://127.0.0.1:5173
 
-Open: http://127.0.0.1:5173
+MongoDB should be available at `mongodb://127.0.0.1:27017/researchx`.
 
-MongoDB must already be running (`mongodb://127.0.0.1:27017/researchx`).
+Individual processes: `npm run dev:ai` | `npm run dev:server` | `npm run dev:web`
 
-### Run (separate terminals)
-
-```powershell
-# Terminal 1 — AI
-npm run dev:ai
-
-# Terminal 2 — Express
-npm run dev:server
-
-# Terminal 3 — Web
-npm run dev:web
-```
-
-### Run (Docker)
+### Docker
 
 ```powershell
 docker compose up --build
-```
-
-- Web: http://127.0.0.1:5173  
-- Express health: http://127.0.0.1:5000/health  
-- AI health: http://127.0.0.1:8000/health  
-
-```powershell
 docker compose down
 ```
 
-Docs: [docker](docs/development/docker.md) · [redis](docs/development/redis.md) · [performance](docs/development/performance.md)
-
-## Testing
+## Tests
 
 ```powershell
 cd apps\ai-service
 ..\..\.venv\Scripts\python.exe -m pytest -q
 npm run test -w researchx-server
 npm run test -w researchx-web
-npm run build -w researchx-web
 ```
-
-Primary product regression: `apps/server/tests/e2e.smoke.test.ts`.
 
 See [docs/testing.md](docs/testing.md).
 
-## Free deployment
+## Deployment
 
-Portable HTTP services + free Mongo tier + optional free Redis. No Kubernetes/Kafka/paid infra required.
+Free path (Atlas + Render): see **[docs/deployment.md](docs/deployment.md)**.
 
-Full guide + checklist: **[docs/deployment.md](docs/deployment.md)**
-
-## Screenshots / demo
-
-_Placeholder — add UI screenshots of dashboard, progress SSE view, and final report for presentations._
+Blueprint file: `render.yaml` (Render → New → Blueprint).
 
 ## Limitations
 
-- Free LLM/search tiers have rate limits and cold starts
-- Background jobs are in-process threads (survive request end; restart may drop in-flight jobs — durable outputs still on disk/Mongo when finished)
-- Redis outage is safe; unfinished jobs after process kill need a new run
-- Production should set `AI_SERVICE_TOKEN`, strong `JWT_SECRET`, and keep FastAPI/Mongo/Redis private
+- Free LLM/search APIs have rate limits
+- In-process research workers: a process restart can drop jobs that were still running
+- Set `AI_SERVICE_TOKEN` and a strong `JWT_SECRET` before any public deploy; keep FastAPI/Mongo/Redis private
 
-## Documentation
+## Docs
 
 - [Architecture](docs/architecture.md)
 - [Deployment](docs/deployment.md)

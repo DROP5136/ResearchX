@@ -1,5 +1,5 @@
 /**
- * Start FastAPI AI service using the repo .venv (Windows or Unix).
+ * Start the FastAPI AI service from the repo venv.
  */
 const { spawn } = require("child_process");
 const fs = require("fs");
@@ -13,10 +13,7 @@ const python = fs.existsSync(winPy) ? winPy : unixPy;
 
 if (!fs.existsSync(python)) {
   console.error(
-    "[dev:ai] Python venv not found. Create it and install deps:\n" +
-      "  python -m venv .venv\n" +
-      "  .\\.venv\\Scripts\\Activate.ps1\n" +
-      "  pip install -r apps/ai-service/requirements.txt"
+    "[dev:ai] Missing .venv. Create it and install apps/ai-service/requirements.txt"
   );
   process.exit(1);
 }

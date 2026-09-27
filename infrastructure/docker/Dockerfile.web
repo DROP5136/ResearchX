@@ -5,8 +5,7 @@ COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/config/package.json packages/config/
-# Alpine (musl) needs the linux-x64-musl Rollup binary; npm often skips it
-# when the lockfile was generated on Windows (npm/cli#4828).
+# Alpine needs the musl Rollup binary (npm optional-deps gap on Windows lockfiles)
 RUN npm ci --workspace=researchx-web --include-workspace-root \
   || npm install --workspace=researchx-web --include-workspace-root
 RUN npm install --no-save --workspace=researchx-web @rollup/rollup-linux-x64-musl \

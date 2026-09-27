@@ -73,9 +73,9 @@ Untrusted inputs (user query, web pages, PDF text, search snippets, RAG chunks) 
 
 ## Secrets
 
-- Never commit `.env` (gitignored).
-- Frontend may only use public `VITE_*` vars (e.g. `VITE_API_URL`).
-- Do not log passwords, JWTs, or API keys.
+- Keep `.env` out of git.
+- Frontend only gets public `VITE_*` values.
+- Avoid logging passwords, JWTs, or API keys.
 
 ## Known limitations
 

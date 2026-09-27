@@ -22,7 +22,7 @@ export function createApp() {
   app.use(requestIdMiddleware);
   app.use(
     helmet({
-      contentSecurityPolicy: false, // API-only; frontend is separate origin
+      contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: "cross-origin" },
     })
   );

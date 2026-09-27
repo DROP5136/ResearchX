@@ -1,7 +1,6 @@
-# ResearchX — local free-stack (Docker Compose)
-# Usage:
-#   docker compose up --build
-#   docker compose down -v
+# ResearchX local stack
+# docker compose up --build
+# docker compose down -v
 
 services:
   mongodb:
@@ -46,7 +45,7 @@ services:
       CHROMA_PATH: ./data/chroma
       CACHE_PATH: ./data/cache
       OUTPUT_PATH: ./data/outputs
-      # Must match Express absolute root so uploaded PDFs are readable for RAG
+      # Shared with Express for PDF RAG
       DOCUMENTS_PATH: /data/documents
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
     volumes:
@@ -84,7 +83,6 @@ services:
       ALLOW_MOCK_MODE: "true"
       ALLOW_EVALUATION: "true"
     volumes:
-      # Same absolute path as ai-service so absolutePath round-trips for RAG
       - ./data/documents:/data/documents
     depends_on:
       mongodb:

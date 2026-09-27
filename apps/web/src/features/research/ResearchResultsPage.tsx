@@ -170,7 +170,7 @@ export function ResearchResultsPage() {
               </ReactMarkdown>
             </div>
           ) : (
-            <EmptyState title="No markdown report" description="The pipeline did not return report markdown." />
+            <EmptyState title="No markdown report" description="No report markdown was returned for this run." />
           )}
         </div>
       )}

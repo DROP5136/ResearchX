@@ -1,4 +1,4 @@
-"""Run benchmark questions — thin wrapper around evaluation.run for back-compat."""
+"""Benchmark runner (calls evaluation.run)."""
 
 from __future__ import annotations
 

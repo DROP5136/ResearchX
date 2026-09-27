@@ -1,8 +1,4 @@
-"""File-based cache (primary) with optional Redis L1 mirror.
-
-Redis is never the only copy of research results — LocalStore remains durable.
-Shared cache keys must not include user PII; callers pass content hashes only.
-"""
+"""File-based cache with optional Redis mirror."""
 
 from __future__ import annotations
 
@@ -31,7 +27,6 @@ class FileCache:
         return self.root / f"{key}.json"
 
     def _redis_key(self, key: str) -> str:
-        # Namespace + content hash only — no user ids or emails.
         return f"{self.namespace}:{key}"
 
     def get(self, *parts: str) -> Any | None:
@@ -46,7 +41,6 @@ class FileCache:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             value = data.get("value")
-            # Warm Redis from file hit
             redis_client.cache_set(self._redis_key(key), {"value": value})
             return value
         except Exception as exc:  # noqa: BLE001

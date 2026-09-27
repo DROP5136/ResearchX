@@ -16,7 +16,7 @@ router = APIRouter(tags=["health"])
     "/health",
     response_model=HealthResponse,
     summary="Service liveness",
-    description="Lightweight liveness check. Never exposes secrets.",
+    description="Liveness check.",
 )
 def health(settings: Settings = Depends(get_app_settings)) -> HealthResponse:
     providers = {
@@ -40,12 +40,11 @@ def health(settings: Settings = Depends(get_app_settings)) -> HealthResponse:
     "/ready",
     response_model=ReadyResponse,
     summary="Service readiness",
-    description="Checks optional dependencies. Redis failure does not mark the service not-ready.",
+    description="Dependency checks. Redis failure does not fail readiness.",
 )
 def ready(response: Response, settings: Settings = Depends(get_app_settings)) -> ReadyResponse:
     redis_ok = redis_client.redis_ping() if (settings.redis_url or "").strip() else None
     data_ok = settings.output_dir.exists() and settings.cache_dir.exists()
-    # AI service is ready if local storage is writable; Redis is optional.
     status = "ready" if data_ok else "not_ready"
     if status != "ready":
         response.status_code = 503

@@ -119,7 +119,7 @@ export function ResearchProgressPage() {
     }
   }, [statusQ.data?.status, id, navigate]);
 
-  if (statusQ.isLoading) return <LoadingState label="Connecting to research pipeline…" />;
+  if (statusQ.isLoading) return <LoadingState label="Loading research status…" />;
   if (statusQ.isError) return <ErrorState message="Could not load research status." onRetry={() => void statusQ.refetch()} />;
 
   const status = statusQ.data!;
@@ -131,7 +131,7 @@ export function ResearchProgressPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">Live pipeline</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">Progress</p>
         <h1 className="mt-2 font-display text-3xl text-ink-950 dark:text-white">Research in progress</h1>
         <p className="mt-2 text-ink-600 dark:text-ink-300">{research?.query || "Loading question…"}</p>
       </div>
@@ -149,7 +149,7 @@ export function ResearchProgressPage() {
         {status.error ? <p className="mt-3 text-sm text-rose-600">{status.error}</p> : null}
         <p className="mt-2 text-xs text-ink-400">
           Status: {status.status}
-          {sseActive ? " · live updates" : " · polling"}
+          {sseActive ? " · live" : " · polling"}
         </p>
       </div>
 

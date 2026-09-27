@@ -1,0 +1,99 @@
+# ResearchX — Render Blueprint (free-tier friendly)
+# Dashboard: New → Blueprint → connect this repo
+# After first deploy, set secret env values in the Render UI (sync: false).
+
+previewsEnabled: false
+
+services:
+  # ── FastAPI / LangGraph ─────────────────────────────────
+  - type: web
+    name: researchx-ai
+    runtime: python
+    plan: free
+    rootDir: apps/ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.api.run_prod
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: MOCK_MODE
+        value: "true"
+      - key: LLM_PROVIDER
+        value: mock
+      - key: SEARCH_PROVIDER
+        value: duckduckgo
+      - key: AI_SERVICE_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CACHE_PATH
+        value: ./data/cache
+      - key: OUTPUT_PATH
+        value: ./data/outputs
+      - key: DOCUMENTS_PATH
+        value: ./data/documents
+      - key: CHROMA_PATH
+        value: ./data/chroma
+      - key: MAX_SOURCES
+        value: "10"
+      - key: MAX_RESEARCH_ITERATIONS
+        value: "1"
+      - key: MAX_CONCURRENT_RESEARCH
+        value: "1"
+      - key: MAX_CONCURRENT_RESEARCH_JOBS
+        value: "1"
+      - key: REDIS_URL
+        value: ""
+
+  # ── Express API ─────────────────────────────────────────
+  - type: web
+    name: researchx-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build -w researchx-server
+    startCommand: npm start -w researchx-server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: FASTAPI_URL
+        sync: false
+      - key: AI_SERVICE_TOKEN
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ALLOW_MOCK_MODE
+        value: "true"
+      - key: ALLOW_EVALUATION
+        value: "false"
+      - key: REDIS_URL
+        value: ""
+      - key: DOCUMENTS_PATH
+        value: ./data/documents
+
+  # ── React static site ───────────────────────────────────
+  - type: web
+    name: researchx-web
+    runtime: static
+    rootDir: .
+    buildCommand: npm install && npm run build -w researchx-web
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false

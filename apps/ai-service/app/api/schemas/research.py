@@ -1,4 +1,4 @@
-"""Research API request/response schemas (thin DTOs over pipeline artifacts)."""
+"""Research API request/response schemas."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ResearchCreateRequest(BaseModel):
-    """Start a new research job against the existing ResearchX pipeline."""
+    """Request body to start a research job."""
 
     query: str = Field(
         ...,

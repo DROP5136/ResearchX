@@ -2,12 +2,15 @@ import path from "path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
-
 const REPO_ROOT = path.resolve(__dirname, "../../../../");
+
+// Load local .env files when present; platform env vars always win.
+dotenv.config({ path: path.resolve(REPO_ROOT, ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
+  HOST: z.string().default("0.0.0.0"),
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
@@ -54,6 +57,9 @@ function loadEnv(): Env {
   }
   if (data.NODE_ENV === "production" && !data.AI_SERVICE_TOKEN) {
     throw new Error("AI_SERVICE_TOKEN is required when NODE_ENV=production");
+  }
+  if (data.NODE_ENV === "production" && data.JWT_SECRET.length < 24) {
+    throw new Error("JWT_SECRET must be at least 24 characters in production");
   }
   return data;
 }

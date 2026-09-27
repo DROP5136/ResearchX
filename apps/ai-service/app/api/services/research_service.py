@@ -1,4 +1,4 @@
-"""Thin orchestration service around ResearchWorkflow + LocalStore."""
+"""Background research jobs over ResearchWorkflow + LocalStore."""
 
 from __future__ import annotations
 
@@ -58,12 +58,11 @@ def _map_progress_message(message: str) -> tuple[str, int]:
 
 
 def _sanitize_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
-    """Strip secrets and absolute filesystem paths from metadata returned to clients."""
+    """Remove secrets and filesystem paths from client-facing metadata."""
     if not meta:
         return {}
     out = copy.deepcopy(meta)
     out.pop("output_dir", None)
-    # Drop any values that look like absolute Windows/Unix paths
     for key, value in list(out.items()):
         if isinstance(value, str) and (
             value.startswith("/") or re.match(r"^[A-Za-z]:\\", value) or "\\" in value and ":" in value[:3]
@@ -76,7 +75,7 @@ def _sanitize_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
 
 def _public_source(row: dict[str, Any]) -> dict[str, Any]:
     meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
-    # Never expose absolute filesystem paths
+    # Drop absolute paths from public source payloads
     safe_meta = {
         k: v
         for k, v in meta.items()
@@ -98,7 +97,7 @@ def _public_source(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class ResearchService:
-    """Orchestrates background research jobs using the existing pipeline."""
+    """Start and query background research jobs."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -161,7 +160,7 @@ class ResearchService:
         return {"research_id": rid, "status": "queued"}
 
     def _build_settings(self, body: ResearchCreateRequest) -> Settings:
-        # Copy current settings so per-job flags do not permanently mutate the process cache.
+        # Copy settings so per-job flags do not mutate process defaults.
         settings = get_settings().model_copy(deep=True)
 
         mock = settings.mock_mode if body.mock_mode is None else body.mock_mode
@@ -228,7 +227,7 @@ class ResearchService:
                     message=(msg or "")[:300],
                 )
 
-            # Abort early if cancelled while queued
+            # Abort if cancelled while queued
             prior = store.load_session() or {}
             if prior.get("status") == "cancelled":
                 return
@@ -259,7 +258,7 @@ class ResearchService:
                     return
                 raise
 
-            # Do not overwrite a cancel that arrived during the run
+            # Skip completion write if cancel landed mid-run
             latest = store.load_session() or {}
             if latest.get("status") == "cancelled":
                 return
@@ -348,7 +347,7 @@ class ResearchService:
                 errors=[str(exc)[:500]],
             )
         except Exception as exc:  # noqa: BLE001
-            # Preserve explicit cancel written by cancel_research()
+            # Keep an explicit cancel from cancel_research()
             session = store.load_session() or {}
             if session.get("status") == "cancelled":
                 return
@@ -368,7 +367,7 @@ class ResearchService:
                 self._threads.pop(rid, None)
 
     def cancel_research(self, research_id: str) -> dict[str, Any]:
-        """Mark a job cancelled. Running thread stops at the next progress checkpoint."""
+        """Mark a job cancelled; the worker stops at the next progress update."""
         store = self._require_store(research_id)
         session = store.load_session() or {}
         status = str(session.get("status") or "")

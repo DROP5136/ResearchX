@@ -1,4 +1,4 @@
-"""Research REST endpoints — thin wrappers around ResearchService."""
+"""Research API routes."""
 
 from __future__ import annotations
 

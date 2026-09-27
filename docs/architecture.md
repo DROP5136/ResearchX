@@ -14,12 +14,12 @@ flowchart TB
     Redis[(Redis optional)]
     Files[(data/ outputs chroma docs)]
   end
-  Web -->|JWT HTTPS| Express
+  Web -->|JWT| Express
   Express --> Mongo
   Express -->|AI_SERVICE_TOKEN| AI
-  Express -.->|progress cache| Redis
+  Express -.-> Redis
   AI --> Files
-  AI -.->|cache L1| Redis
+  AI -.-> Redis
   AI --> LangGraph
   subgraph LangGraph [LangGraph workflow]
     P[Planner]
@@ -34,18 +34,16 @@ flowchart TB
 
 ## Research job flow
 
-1. `POST /api/v1/research` (Express) creates a Mongo `ResearchSession` and calls FastAPI.
-2. FastAPI returns `research_id` immediately (`202`) and runs LangGraph in a **background thread**.
-3. Progress is mirrored to local session JSON + optional Redis TTL keys.
-4. Frontend uses **SSE** `GET /api/v1/research/:id/events` (with polling fallback).
-5. `POST /api/v1/research/:id/cancel` marks Mongo cancelled and best-effort stops the FastAPI job at the next progress checkpoint.
-6. On completion, Express syncs report/sources/claims into Mongo (durable).
+1. `POST /api/v1/research` creates a Mongo session and starts FastAPI work.
+2. FastAPI returns `202` and runs LangGraph in a background thread.
+3. Progress is stored in session files and optionally Redis.
+4. The UI follows progress via SSE (`GET /api/v1/research/:id/events`) or polling.
+5. Cancel (`POST .../cancel`) marks the job cancelled; the worker stops at the next progress update.
+6. When finished, Express syncs the report and artifacts into MongoDB.
 
 Statuses: `queued` → `running` → `completed` | `failed` | `cancelled`.
 
-## Free-first constraints
+## Notes
 
-- No Kafka / Kubernetes
-- Redis optional
-- Docker optional for production
-- Providers selectable via env (`mock`, `ollama`, `groq`, `gemini`, `duckduckgo`, …)
+- Redis and Docker are optional.
+- LLM / search providers are selected with env vars (`mock`, `ollama`, `groq`, `gemini`, `duckduckgo`, …).
