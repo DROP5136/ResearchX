@@ -9,9 +9,12 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "concurrently -k -n ai,server,web -c magenta,cyan,green \"npm:dev:ai\" \"npm:dev:server\" \"npm:dev:web\"",
     "dev:web": "npm run dev -w researchx-web",
     "dev:server": "npm run dev -w researchx-server",
-    "dev:ai": "cd apps/ai-service && ../../.venv/Scripts/python.exe -m uvicorn app.api.main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:ai": "node scripts/dev-ai.js",
+    "ports:free": "node scripts/free-ports.js",
+    "predev": "node scripts/free-ports.js",
     "build": "npm run build -w researchx-server && npm run build -w researchx-web",
     "test": "npm run test -w researchx-server && npm run test -w researchx-web",
     "test:server": "npm run test -w researchx-server",
@@ -19,6 +22,9 @@
     "test:ai": "cd apps/ai-service && ../../.venv/Scripts/python.exe -m pytest -q",
     "lint": "npm run lint -w researchx-server && npm run lint -w researchx-web",
     "install:ai": "cd apps/ai-service && ../../.venv/Scripts/pip.exe install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.4"
   },
   "engines": {
     "node": ">=18"

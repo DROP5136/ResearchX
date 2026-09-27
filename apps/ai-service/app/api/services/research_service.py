@@ -9,10 +9,12 @@ from typing import Any
 
 from app.config import Settings, get_settings
 from app.api.errors import APIError, PipelineFailureError, ResearchNotFoundError
+from app.api.path_safety import sanitize_pdf_paths
 from app.api.schemas.research import ResearchCreateRequest
 from app.graph.workflow import ResearchWorkflow
 from app.schemas.research import ResearchDepth, ResearchQuery
 from app.storage.local_store import LocalStore
+from app.storage import redis_client
 from app.utils.helpers import research_id as make_research_id
 from app.utils.helpers import utc_now
 from app.utils.logging import get_logger
@@ -103,22 +105,48 @@ class ResearchService:
         self._threads: dict[str, threading.Thread] = {}
 
     def start_research(self, body: ResearchCreateRequest) -> dict[str, str]:
+        settings = get_settings()
+        with self._lock:
+            active = sum(1 for t in self._threads.values() if t.is_alive())
+            if active >= settings.effective_max_concurrent_jobs:
+                raise APIError(
+                    "TOO_MANY_JOBS",
+                    "Too many concurrent research jobs; try again shortly",
+                    status_code=429,
+                )
+
+        # Confine PDF paths before queuing work
+        if body.pdf_paths:
+            body = body.model_copy(update={"pdf_paths": sanitize_pdf_paths(list(body.pdf_paths), settings)})
+
         rid = make_research_id()
         store = LocalStore(rid)
         now = utc_now().isoformat()
-        store.save_session(
+        session = {
+            "research_id": rid,
+            "query": body.query,
+            "status": "queued",
+            "current_stage": "queued",
+            "progress": 0,
+            "created_at": now,
+            "started_at": None,
+            "completed_at": None,
+            "updated_at": now,
+            "retry_count": 0,
+            "errors": [],
+            "message": "Research queued",
+            "options": body.model_dump(),
+        }
+        store.save_session(session)
+        redis_client.set_job_progress(
+            rid,
             {
                 "research_id": rid,
-                "query": body.query,
-                "status": "started",
+                "status": "queued",
                 "current_stage": "queued",
                 "progress": 0,
-                "created_at": now,
-                "updated_at": now,
-                "errors": [],
                 "message": "Research queued",
-                "options": body.model_dump(),
-            }
+            },
         )
 
         thread = threading.Thread(
@@ -130,7 +158,7 @@ class ResearchService:
         with self._lock:
             self._threads[rid] = thread
         thread.start()
-        return {"research_id": rid, "status": "started"}
+        return {"research_id": rid, "status": "queued"}
 
     def _build_settings(self, body: ResearchCreateRequest) -> Settings:
         # Copy current settings so per-job flags do not permanently mutate the process cache.
@@ -150,13 +178,32 @@ class ResearchService:
             logger.info("enable_web_search=false with no documents → forcing mock providers")
         return settings
 
+    def _mirror_progress(self, rid: str, store: LocalStore, **fields: Any) -> dict[str, Any]:
+        session = store.update_session(**fields)
+        redis_client.set_job_progress(
+            rid,
+            {
+                "research_id": rid,
+                "status": session.get("status"),
+                "current_stage": session.get("current_stage"),
+                "progress": int(session.get("progress") or 0),
+                "message": session.get("message"),
+                "errors": list(session.get("errors") or []),
+            },
+        )
+        return session
+
     def _run_job(self, rid: str, body: ResearchCreateRequest) -> None:
         store = LocalStore(rid)
         try:
-            store.update_session(
+            started = utc_now().isoformat()
+            self._mirror_progress(
+                rid,
+                store,
                 status="running",
                 current_stage="planning",
                 progress=STAGE_PROGRESS["planning"],
+                started_at=started,
                 message="Starting research pipeline",
             )
 
@@ -167,16 +214,24 @@ class ResearchService:
 
             def on_progress(msg: str) -> None:
                 stage, progress = _map_progress_message(msg)
-                # Never rewrite completed/failed from late save messages incorrectly mid-flight
                 session = store.load_session() or {}
-                if session.get("status") in {"completed", "failed"}:
+                if session.get("status") in {"completed", "failed", "cancelled"}:
+                    if session.get("status") == "cancelled":
+                        raise RuntimeError("Research cancelled")
                     return
-                store.update_session(
+                self._mirror_progress(
+                    rid,
+                    store,
                     status="running",
                     current_stage=stage,
                     progress=progress,
                     message=(msg or "")[:300],
                 )
+
+            # Abort early if cancelled while queued
+            prior = store.load_session() or {}
+            if prior.get("status") == "cancelled":
+                return
 
             workflow = ResearchWorkflow(settings=settings, progress_callback=on_progress)
             query = ResearchQuery(
@@ -188,7 +243,26 @@ class ResearchService:
                 enable_web_search=body.enable_web_search,
                 enable_document_research=use_docs,
             )
-            state = workflow.run(query, research_id=rid)
+            try:
+                state = workflow.run(query, research_id=rid)
+            except RuntimeError as cancel_exc:
+                if "cancelled" in str(cancel_exc).lower():
+                    self._mirror_progress(
+                        rid,
+                        store,
+                        status="cancelled",
+                        current_stage="cancelled",
+                        progress=int((store.load_session() or {}).get("progress") or 0),
+                        completed_at=utc_now().isoformat(),
+                        message="Research cancelled",
+                    )
+                    return
+                raise
+
+            # Do not overwrite a cancel that arrived during the run
+            latest = store.load_session() or {}
+            if latest.get("status") == "cancelled":
+                return
 
             status_obj = state.get("status")
             status_val = status_obj.value if hasattr(status_obj, "value") else str(status_obj or "completed")
@@ -239,26 +313,77 @@ class ResearchService:
                 "metadata": _sanitize_meta(state.get("meta")),
             }
             store.write_json("result.json", result_payload)
-            store.update_session(
-                status="completed" if "fail" not in status_val else "failed",
-                current_stage="completed" if "fail" not in status_val else "failed",
+            final_status = "completed" if "fail" not in status_val else "failed"
+            self._mirror_progress(
+                rid,
+                store,
+                status=final_status,
+                current_stage="completed" if final_status == "completed" else "failed",
                 progress=100,
+                completed_at=utc_now().isoformat(),
                 message="Research finished",
                 pipeline_status=status_val,
                 errors=list(state.get("errors") or []),
             )
-        except Exception as exc:  # noqa: BLE001
+        except RuntimeError as exc:
+            if "cancelled" in str(exc).lower():
+                self._mirror_progress(
+                    rid,
+                    store,
+                    status="cancelled",
+                    current_stage="cancelled",
+                    completed_at=utc_now().isoformat(),
+                    message="Research cancelled",
+                )
+                return
             logger.exception("Research job %s failed: %s", rid, exc)
-            store.update_session(
+            self._mirror_progress(
+                rid,
+                store,
                 status="failed",
                 current_stage="failed",
                 progress=100,
+                completed_at=utc_now().isoformat(),
+                message="Pipeline failure",
+                errors=[str(exc)[:500]],
+            )
+        except Exception as exc:  # noqa: BLE001
+            # Preserve explicit cancel written by cancel_research()
+            session = store.load_session() or {}
+            if session.get("status") == "cancelled":
+                return
+            logger.exception("Research job %s failed: %s", rid, exc)
+            self._mirror_progress(
+                rid,
+                store,
+                status="failed",
+                current_stage="failed",
+                progress=100,
+                completed_at=utc_now().isoformat(),
                 message="Pipeline failure",
                 errors=[str(exc)[:500]],
             )
         finally:
             with self._lock:
                 self._threads.pop(rid, None)
+
+    def cancel_research(self, research_id: str) -> dict[str, Any]:
+        """Mark a job cancelled. Running thread stops at the next progress checkpoint."""
+        store = self._require_store(research_id)
+        session = store.load_session() or {}
+        status = str(session.get("status") or "")
+        if status in {"completed", "failed", "cancelled"}:
+            return self.get_status(research_id)
+        self._mirror_progress(
+            research_id,
+            store,
+            status="cancelled",
+            current_stage="cancelled",
+            completed_at=utc_now().isoformat(),
+            message="Research cancelled",
+            errors=list(session.get("errors") or []),
+        )
+        return self.get_status(research_id)
 
     def _require_store(self, research_id: str) -> LocalStore:
         store = LocalStore(research_id)
@@ -267,15 +392,21 @@ class ResearchService:
         return store
 
     def get_status(self, research_id: str) -> dict[str, Any]:
+        cached = redis_client.get_job_progress(research_id)
         store = self._require_store(research_id)
         session = store.load_session() or {}
+        # Prefer durable session; fill gaps from Redis mirror
+        status = session.get("status") or (cached or {}).get("status") or "unknown"
         return {
             "research_id": research_id,
-            "status": session.get("status", "unknown"),
-            "current_stage": session.get("current_stage"),
-            "progress": int(session.get("progress") or 0),
-            "message": session.get("message"),
-            "errors": list(session.get("errors") or []),
+            "status": status,
+            "current_stage": session.get("current_stage") or (cached or {}).get("current_stage"),
+            "progress": int(session.get("progress") or (cached or {}).get("progress") or 0),
+            "message": session.get("message") or (cached or {}).get("message"),
+            "errors": list(session.get("errors") or (cached or {}).get("errors") or []),
+            "started_at": session.get("started_at"),
+            "completed_at": session.get("completed_at"),
+            "retry_count": int(session.get("retry_count") or 0),
         }
 
     def get_result(self, research_id: str) -> dict[str, Any]:
@@ -286,6 +417,11 @@ class ResearchService:
             result.setdefault("current_stage", session.get("current_stage"))
             result.setdefault("progress", session.get("progress", 0))
             result["metadata"] = _sanitize_meta(result.get("metadata"))
+            sources = result.get("sources")
+            if isinstance(sources, list):
+                result["sources"] = [
+                    _public_source(r) if isinstance(r, dict) else r for r in sources
+                ]
             return result
 
         # Fallback for in-progress or CLI-created runs
@@ -299,6 +435,10 @@ class ResearchService:
         if isinstance(report, dict):
             charts = list(report.get("charts") or []) + list(report.get("chart_data") or [])
 
+        public_sources = [
+            _public_source(r) for r in (sources if isinstance(sources, list) else []) if isinstance(r, dict)
+        ]
+
         return {
             "research_id": research_id,
             "query": session.get("query") or (report or {}).get("query") or "",
@@ -306,7 +446,7 @@ class ResearchService:
             "current_stage": session.get("current_stage"),
             "progress": int(session.get("progress") or (100 if report else 0)),
             "subtasks": session.get("subtasks") or [],
-            "sources": sources if isinstance(sources, list) else [],
+            "sources": public_sources,
             "evidence": evidence if isinstance(evidence, list) else [],
             "claims": claims if isinstance(claims, list) else [],
             "contradictions": contradictions if isinstance(contradictions, list) else [],
@@ -374,7 +514,7 @@ class ResearchService:
             status = session.get("status")
             if status == "failed":
                 raise PipelineFailureError("Research failed before a report was produced")
-            if status in {"running", "started"}:
+            if status in {"running", "started", "queued"}:
                 raise APIError(
                     "REPORT_NOT_READY",
                     "Report is not ready yet",

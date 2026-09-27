@@ -1,185 +1,158 @@
 # ResearchX
 
-Multi-agent AI research platform: React client → Express/Mongo app server → FastAPI/LangGraph AI service.
+Multi-agent AI research platform for free local demos and free-tier public deployment.
+
+React → Express/MongoDB → FastAPI/LangGraph → sourced, fact-checked reports (optional PDF RAG).
 
 ## Overview
 
-ResearchX turns a research question into a sourced, fact-checked, analyzed report. The monorepo separates three apps so each can scale and deploy independently while sharing API contracts.
+ResearchX turns a research question into a citation-grounded report with evidence, claims, contradiction detection, quantitative analysis, and charts. Designed as a B.Tech / final-year showcase that stays **free to build, run, and deploy**.
 
 ## Architecture
 
-```text
-React (apps/web)
-    ↓  HTTP / JWT
-Express + MongoDB (apps/server)
-    ↓  HTTP
-FastAPI (apps/ai-service)
-    ↓
-LangGraph workflow
-    ↓
-Research → Evidence → Fact Checking → Analysis → Report
-    ↓
-MongoDB (app data)  |  Local storage / Chroma (AI artifacts)
+```mermaid
+flowchart LR
+  Web[React] --> Express
+  Express --> Mongo[(MongoDB)]
+  Express --> AI[FastAPI]
+  AI --> LG[LangGraph]
+  LG --> P[Planner]
+  LG --> R[Research]
+  LG --> E[Evidence]
+  LG --> F[Fact check]
+  LG --> A[Analyst]
+  LG --> W[Writer]
+  Express -. optional .-> Redis[(Redis)]
+  AI -. optional .-> Redis
 ```
 
-Dependency direction: **web → server → ai-service**. The web client never imports Python. The Node server never imports Python modules.
+Details: [docs/architecture.md](docs/architecture.md)
 
-## Repository Structure
+## Major features
 
-```text
-researchx-ai/
-├── apps/
-│   ├── ai-service/     # Python LangGraph + FastAPI
-│   ├── server/         # Express + MongoDB
-│   └── web/            # React + Vite
-├── packages/
-│   ├── contracts/      # Shared TS API types
-│   └── config/         # Shared config docs
-├── infrastructure/     # Docker, nginx, helper scripts
-├── docs/               # Architecture & development docs
-├── evaluation/         # Benchmarks + results (artifacts)
-├── data/               # Runtime cache / chroma / outputs
-├── docker-compose.yml
-├── Makefile
-├── package.json        # npm workspaces (server, web, packages)
-├── PRD.md
-└── README.md
-```
+- Auth, projects, research sessions
+- Background research jobs + SSE progress
+- Web research, evidence, claims, citations, fact checking
+- Contradiction detection, iterative research
+- Quantitative analysis + charts
+- PDF/document RAG + hybrid web+document research
+- Evaluation/benchmarking, performance instrumentation
+- Security hardening (JWT, SSRF guards, AI service token, rate limits)
+- Optional Redis cache; Docker Compose local stack
 
-## Tech Stack
+## Technology stack
 
 | Layer | Stack |
 |-------|--------|
 | Web | React 18, TypeScript, Vite, Tailwind |
-| Server | Node.js, Express, Mongoose, JWT |
-| AI | Python 3.11+, FastAPI, LangGraph, Groq/Gemini, Chroma |
-| Data | MongoDB (users/projects/sessions), local files (reports/cache) |
+| Server | Node.js, Express, Mongoose, JWT, optional ioredis |
+| AI | Python 3.11+, FastAPI, LangGraph, Chroma, FastEmbed |
+| Data | MongoDB (source of truth), optional Redis, local files |
+| Free providers | Mock / Ollama / Groq free tier / DuckDuckGo |
 
-## Local Development
+## Local setup
 
 ### Prerequisites
 
-- Python 3.11+ with venv at repo root `.venv/`
+- Python 3.11+ (venv at repo `.venv/`)
 - Node.js 18+
-- MongoDB (Atlas URI or local `mongodb://127.0.0.1:27017/researchx`)
+- MongoDB **or** Docker
+- Optional: Redis
 
 ### Install
 
 ```powershell
-# Python deps
 .\.venv\Scripts\Activate.ps1
 pip install -r apps/ai-service/requirements.txt
-
-# Node workspaces (server + web + contracts)
 npm install
 ```
 
 ### Environment
 
-Copy examples (never commit real `.env` files):
-
 ```powershell
-copy apps\ai-service\.env.example apps\ai-service\.env
-copy apps\server\.env.example apps\server\.env
-copy apps\web\.env.example apps\web\.env
+copy .env.example .env
+# also configure apps/server/.env and apps/web/.env as needed
 ```
 
-See [Environment Variables](#environment-variables) below.
+See `.env.example` for the full variable list. **Never commit secrets.**
 
-## Running AI Service
-
-```powershell
-cd apps\ai-service
-..\..\.venv\Scripts\Activate.ps1
-uvicorn app.api.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Health: http://127.0.0.1:8000/health  
-Docs: http://127.0.0.1:8000/docs
-
-CLI (optional):
+### Run (one command)
 
 ```powershell
-cd apps\ai-service
-python -m app.main "Your research question" --mock
+cd "c:\GENAI PROJECT\researchx-ai"
+npm run dev
 ```
 
-## Running Backend
-
-```powershell
-npm run dev -w researchx-server
-```
-
-Health: http://127.0.0.1:5000/health
-
-## Running Frontend
-
-```powershell
-npm run dev -w researchx-web
-```
+This frees ports 5000/8000/5173, then starts AI + Express + Web together.
 
 Open: http://127.0.0.1:5173
 
-## Running Tests
+MongoDB must already be running (`mongodb://127.0.0.1:27017/researchx`).
+
+### Run (separate terminals)
 
 ```powershell
-# Python
-cd apps\ai-service
-..\..\.venv\Scripts\python.exe -m pytest -q
+# Terminal 1 — AI
+npm run dev:ai
 
-# Node + web
-npm run test -w researchx-server
-npm run test -w researchx-web
+# Terminal 2 — Express
+npm run dev:server
+
+# Terminal 3 — Web
+npm run dev:web
 ```
 
-Or: `make test` (Windows: run the Make targets manually / use Git Bash).
-
-## Environment Variables
-
-| App | File | Notes |
-|-----|------|--------|
-| AI | `apps/ai-service/.env` | LLM/search keys, paths, mock mode |
-| Server | `apps/server/.env` | `MONGODB_URI`, `JWT_SECRET`, `FASTAPI_URL` |
-| Web | `apps/web/.env` | Only `VITE_API_URL` (public) |
-
-Root `.env.example` mirrors AI service vars for convenience.
-
-## Docker
+### Run (Docker)
 
 ```powershell
 docker compose up --build
 ```
 
-Services: `web`, `server`, `ai-service`, `mongodb`. Dockerfiles live under `infrastructure/docker/`.
+- Web: http://127.0.0.1:5173  
+- Express health: http://127.0.0.1:5000/health  
+- AI health: http://127.0.0.1:8000/health  
 
-## Evaluation
+```powershell
+docker compose down
+```
 
-Engine code: `apps/ai-service/app/evaluation/`  
-Artifacts: `evaluation/benchmarks/`, `evaluation/results/`
+Docs: [docker](docs/development/docker.md) · [redis](docs/development/redis.md) · [performance](docs/development/performance.md)
+
+## Testing
 
 ```powershell
 cd apps\ai-service
-python -m app.evaluation.run --mock
+..\..\.venv\Scripts\python.exe -m pytest -q
+npm run test -w researchx-server
+npm run test -w researchx-web
+npm run build -w researchx-web
 ```
 
-## Deployment
+Primary product regression: `apps/server/tests/e2e.smoke.test.ts`.
 
-See `docs/deployment/README.md`. Typical production layout: separate containers for web (nginx), server, ai-service, and managed MongoDB.
+See [docs/testing.md](docs/testing.md).
+
+## Free deployment
+
+Portable HTTP services + free Mongo tier + optional free Redis. No Kubernetes/Kafka/paid infra required.
+
+Full guide + checklist: **[docs/deployment.md](docs/deployment.md)**
+
+## Screenshots / demo
+
+_Placeholder — add UI screenshots of dashboard, progress SSE view, and final report for presentations._
+
+## Limitations
+
+- Free LLM/search tiers have rate limits and cold starts
+- Background jobs are in-process threads (survive request end; restart may drop in-flight jobs — durable outputs still on disk/Mongo when finished)
+- Redis outage is safe; unfinished jobs after process kill need a new run
+- Production should set `AI_SERVICE_TOKEN`, strong `JWT_SECRET`, and keep FastAPI/Mongo/Redis private
 
 ## Documentation
 
-- [Architecture overview](docs/architecture/overview.md)
-- [AI pipeline](docs/architecture/ai-pipeline.md)
-- [Document / PDF RAG](docs/architecture/document-rag.md)
-- [System flow](docs/architecture/system-flow.md)
-- [API](docs/api/README.md)
-- [Setup](docs/development/setup.md)
-- [Testing](docs/development/testing.md)
+- [Architecture](docs/architecture.md)
+- [Deployment](docs/deployment.md)
+- [Security](docs/development/security.md)
+- [Document RAG](docs/architecture/document-rag.md)
 - [PRD](PRD.md)
-
-## Document research (PDF RAG)
-
-1. Open **Documents**, pick a project, upload PDFs.
-2. Wait until status is **Ready** (parsing → embedding → indexing).
-3. Start **Research**, enable **Uploaded documents**, select files (and optionally Web).
-4. In results, the **Sources** tab separates web vs document citations (page + excerpt).

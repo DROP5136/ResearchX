@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from app.api.errors import APIError
+from app.api.path_safety import resolve_documents_path
 from app.api.schemas.documents import DocumentProcessRequest
 from app.config import get_settings
 from app.rag.pipeline import DocumentRAGPipeline
@@ -16,23 +15,7 @@ logger = get_logger("researchx.api.documents")
 class DocumentService:
     def process(self, body: DocumentProcessRequest) -> dict:
         settings = get_settings()
-        path = Path(body.path)
-        if not path.is_absolute():
-            # Resolve relative paths against monorepo documents dir
-            path = (settings.documents_dir / path).resolve()
-        else:
-            path = path.resolve()
-
-        # Constrain to documents_dir (or its parents under data/) for safety
-        docs_root = settings.documents_dir.resolve()
-        try:
-            path.relative_to(docs_root)
-        except ValueError as exc:
-            raise APIError(
-                "INVALID_DOCUMENT_PATH",
-                "Document path is outside the allowed documents directory",
-                status_code=400,
-            ) from exc
+        path = resolve_documents_path(body.path, settings)
 
         if not path.exists():
             raise APIError("DOCUMENT_NOT_FOUND", "PDF file not found on disk", status_code=404)

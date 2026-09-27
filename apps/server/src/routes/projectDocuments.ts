@@ -1,9 +1,10 @@
 import { Router } from "express";
 import * as documentController from "../controllers/documentController";
 import { requireAuth } from "../middleware/auth";
+import { uploadLimiter } from "../middleware/rateLimits";
 import { uploadPdf } from "../middleware/upload";
 import { validate } from "../middleware/validate";
-import { idParamSchema, projectIdParamSchema } from "../utils/validators";
+import { projectIdParamSchema } from "../utils/validators";
 
 const router = Router({ mergeParams: true });
 
@@ -11,9 +12,9 @@ router.use(requireAuth);
 
 router.post(
   "/",
+  uploadLimiter,
   validate(projectIdParamSchema, "params"),
   (req, res, next) => {
-    // multer + nested @types/express versions can disagree under npm workspaces
     (uploadPdf as unknown as (r: typeof req, s: typeof res, n: (e?: unknown) => void) => void)(
       req,
       res,

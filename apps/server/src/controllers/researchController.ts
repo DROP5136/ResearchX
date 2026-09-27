@@ -4,8 +4,23 @@ import { ResearchSession } from "../models/ResearchSession";
 import { SavedReport } from "../models/SavedReport";
 import type { AuthRequest } from "../middleware/auth";
 import { fastApiService } from "../services/fastApiService";
+import { cacheGet, cacheSet } from "../services/redis";
+import { mockModeAllowed } from "../config/env";
 import { AppError } from "../utils/errors";
 import { toObjectId } from "../utils/helpers";
+
+/** Canonical job statuses for API responses (lowercase). */
+export type ResearchStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+function normalizeStatus(status: string | undefined | null): ResearchStatus {
+  const s = (status || "").toLowerCase();
+  if (s === "cancelled" || s === "canceled") return "cancelled";
+  if (s.includes("fail")) return "failed";
+  if (s.includes("completed") || s.includes("insufficient")) return "completed";
+  if (s === "started" || s === "queued") return "queued";
+  if (s === "running" || s.includes("run")) return "running";
+  return "running";
+}
 
 function serializeSession(
   s: {
@@ -16,7 +31,9 @@ function serializeSession(
     status: string;
     currentStage?: string | null;
     progress?: number;
+    startedAt?: Date | null;
     completedAt?: Date | null;
+    retryCount?: number;
     fastApiResearchId: string;
     report?: unknown;
     sources?: unknown[];
@@ -31,16 +48,19 @@ function serializeSession(
   },
   opts: { includePayload?: boolean } = {}
 ) {
+  const status = normalizeStatus(s.status);
   const base = {
     id: String(s._id),
     projectId: String(s.projectId),
     userId: String(s.userId),
     query: s.query,
-    status: s.status,
+    status,
     currentStage: s.currentStage || null,
     progress: s.progress ?? 0,
-    fastApiResearchId: s.fastApiResearchId,
+    startedAt: s.startedAt || null,
     completedAt: s.completedAt || null,
+    retryCount: s.retryCount ?? 0,
+    fastApiResearchId: s.fastApiResearchId,
     error: s.error || null,
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
@@ -66,23 +86,21 @@ async function ownedSession(userId: string, id: string) {
   return session;
 }
 
-function mapPipelineStatus(status: string | undefined | null): string {
-  const s = (status || "").toLowerCase();
-  if (!s) return "running";
-  if (s.includes("fail")) return "failed";
-  if (s === "started") return "started";
-  if (s.includes("completed") || s.includes("insufficient")) return "completed";
-  return "running";
+function progressCacheKey(sessionId: string) {
+  return `research:progress:${sessionId}`;
 }
 
 async function syncFromFastApi(session: InstanceType<typeof ResearchSession>) {
   const status = await fastApiService.getResearchStatus(session.fastApiResearchId);
-  const mapped = mapPipelineStatus(status.status);
+  const mapped = normalizeStatus(status.status);
   session.status = mapped;
   session.currentStage = status.current_stage || session.currentStage;
   session.progress = typeof status.progress === "number" ? status.progress : session.progress;
   if (status.errors?.length) {
     session.error = status.errors.join("; ");
+  }
+  if (mapped === "running" && !session.startedAt) {
+    session.startedAt = new Date();
   }
 
   if (mapped === "completed" || mapped === "failed") {
@@ -104,6 +122,21 @@ async function syncFromFastApi(session: InstanceType<typeof ResearchSession>) {
   }
 
   await session.save();
+
+  await cacheSet(
+    progressCacheKey(String(session._id)),
+    {
+      researchId: String(session._id),
+      status: session.status,
+      currentStage: session.currentStage,
+      progress: session.progress,
+      error: session.error,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+    },
+    120
+  );
+
   return session;
 }
 
@@ -169,7 +202,7 @@ export async function startResearch(req: AuthRequest, res: Response, next: NextF
       enable_pdf_rag: enableDocs,
       enable_document_research: enableDocs,
       enable_analysis: body.enableAnalysis ?? true,
-      mock_mode: body.mockMode ?? null,
+      mock_mode: mockModeAllowed() ? (body.mockMode ?? null) : false,
       requirements: body.requirements || [],
       pdf_paths: pdfPaths,
       document_ids: documentIds,
@@ -179,9 +212,11 @@ export async function startResearch(req: AuthRequest, res: Response, next: NextF
       projectId: project._id,
       userId: toObjectId(req.userId!, "userId"),
       query: body.query,
-      status: started.status || "started",
+      status: normalizeStatus(started.status || "queued"),
       currentStage: "queued",
       progress: 0,
+      startedAt: null,
+      retryCount: 0,
       fastApiResearchId: started.research_id,
       options: {
         depth: body.depth,
@@ -210,7 +245,11 @@ export async function listResearch(req: AuthRequest, res: Response, next: NextFu
     };
     const filter: Record<string, unknown> = { userId: req.userId };
     if (projectId) filter.projectId = projectId;
-    if (status) filter.status = status;
+    if (status) {
+      const n = normalizeStatus(status);
+      // Include legacy "started" when filtering queued
+      filter.status = n === "queued" ? { $in: ["queued", "started"] } : n;
+    }
 
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
@@ -236,17 +275,95 @@ export async function listResearch(req: AuthRequest, res: Response, next: NextFu
 export async function getResearchStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     let session = await ownedSession(req.userId!, req.params.id);
-    if (session.status !== "completed" && session.status !== "failed") {
+    const terminal = ["completed", "failed", "cancelled"].includes(normalizeStatus(session.status));
+    if (!terminal) {
       session = await syncFromFastApi(session);
     }
+    const elapsedMs =
+      session.startedAt != null ? Date.now() - new Date(session.startedAt).getTime() : null;
     res.json({
       researchId: String(session._id),
       fastApiResearchId: session.fastApiResearchId,
-      status: session.status,
+      status: normalizeStatus(session.status),
       currentStage: session.currentStage,
       progress: session.progress,
       error: session.error,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+      elapsedMs,
+      retryCount: session.retryCount ?? 0,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function streamResearchEvents(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    let session = await ownedSession(req.userId!, req.params.id);
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    let closed = false;
+    req.on("close", () => {
+      closed = true;
+    });
+
+    const send = (event: string, data: unknown) => {
+      if (closed) return;
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    send("connected", { researchId: String(session._id) });
+
+    while (!closed) {
+      const cached = await cacheGet<{
+        status: string;
+        currentStage?: string;
+        progress?: number;
+        error?: string | null;
+      }>(progressCacheKey(String(session._id)));
+
+      const terminal = ["completed", "failed", "cancelled"].includes(normalizeStatus(session.status));
+      if (!terminal) {
+        try {
+          session = await syncFromFastApi(session);
+        } catch (err) {
+          send("error", {
+            message: err instanceof Error ? err.message : "sync failed",
+          });
+        }
+      } else if (cached) {
+        /* already terminal — use DB state */
+      }
+
+      const status = normalizeStatus(session.status);
+      const payload = {
+        researchId: String(session._id),
+        status,
+        currentStage: session.currentStage,
+        progress: session.progress ?? 0,
+        error: session.error,
+        startedAt: session.startedAt,
+        completedAt: session.completedAt,
+        elapsedMs:
+          session.startedAt != null ? Date.now() - new Date(session.startedAt).getTime() : null,
+      };
+      send("progress", payload);
+
+      if (status === "completed" || status === "failed" || status === "cancelled") {
+        send("done", payload);
+        break;
+      }
+
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+
+    res.end();
   } catch (err) {
     next(err);
   }
@@ -255,9 +372,10 @@ export async function getResearchStatus(req: AuthRequest, res: Response, next: N
 export async function getResearch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     let session = await ownedSession(req.userId!, req.params.id);
-    if (session.status !== "completed" && session.status !== "failed") {
+    const status = normalizeStatus(session.status);
+    if (status !== "completed" && status !== "failed" && status !== "cancelled") {
       session = await syncFromFastApi(session);
-    } else if (session.status === "completed" && !session.report) {
+    } else if (status === "completed" && !session.report) {
       session = await syncFromFastApi(session);
     }
     res.json({ research: serializeSession(session, { includePayload: true }) });
@@ -314,7 +432,7 @@ export async function getResearchReport(req: AuthRequest, res: Response, next: N
 export async function saveResearch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const session = await ownedSession(req.userId!, req.params.id);
-    if (session.status !== "completed") {
+    if (normalizeStatus(session.status) !== "completed") {
       throw new AppError("RESEARCH_NOT_READY", "Only completed research can be saved", 409);
     }
     const title =
@@ -360,6 +478,42 @@ export async function unsaveResearch(req: AuthRequest, res: Response, next: Next
       throw new AppError("SAVED_REPORT_NOT_FOUND", "Saved report not found", 404);
     }
     res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function cancelResearch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const session = await ownedSession(req.userId!, req.params.id);
+    const status = normalizeStatus(session.status);
+    if (status === "completed" || status === "failed" || status === "cancelled") {
+      res.json({ research: serializeSession(session) });
+      return;
+    }
+    // Best-effort stop of FastAPI background job (Mongo remains source of truth for UI)
+    try {
+      await fastApiService.cancelResearch(session.fastApiResearchId);
+    } catch {
+      /* FastAPI may be briefly unavailable; still mark Mongo cancelled */
+    }
+    session.status = "cancelled";
+    session.currentStage = "cancelled";
+    session.completedAt = new Date();
+    session.error = session.error || "Cancelled by user";
+    await session.save();
+    await cacheSet(
+      progressCacheKey(String(session._id)),
+      {
+        researchId: String(session._id),
+        status: "cancelled",
+        currentStage: "cancelled",
+        progress: session.progress,
+        error: session.error,
+      },
+      120
+    );
+    res.json({ research: serializeSession(session) });
   } catch (err) {
     next(err);
   }

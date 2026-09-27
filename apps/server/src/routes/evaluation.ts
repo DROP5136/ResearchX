@@ -1,11 +1,21 @@
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
+import { evaluationAllowed } from "../config/env";
 import { requireAuth } from "../middleware/auth";
 import { fastApiService } from "../services/fastApiService";
+import { AppError } from "../utils/errors";
 
 const router = Router();
 
 router.use(requireAuth);
+
+router.use((_req, _res, next) => {
+  if (!evaluationAllowed()) {
+    next(new AppError("FORBIDDEN", "Evaluation endpoints are disabled in this environment", 403));
+    return;
+  }
+  next();
+});
 
 router.get("/latest", async (_req: Request, res: Response, next: NextFunction) => {
   try {

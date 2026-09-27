@@ -140,15 +140,30 @@ export function ResearchResultsPage() {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  a: ({ href, children }) => (
-                    <a href={href} target="_blank" rel="noreferrer" onClick={() => {
-                      const match = String(children).match(/SRC_[a-zA-Z0-9]+/);
-                      if (match) {
-                        setHighlightSource(match[0]);
-                        setTab("Sources");
-                      }
-                    }}>{children}</a>
-                  ),
+                  a: ({ href, children }) => {
+                    const safe =
+                      typeof href === "string" &&
+                      /^(https?:|mailto:)/i.test(href);
+                    if (!safe) {
+                      return <span>{children}</span>;
+                    }
+                    return (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        onClick={() => {
+                          const match = String(children).match(/SRC_[a-zA-Z0-9]+/);
+                          if (match) {
+                            setHighlightSource(match[0]);
+                            setTab("Sources");
+                          }
+                        }}
+                      >
+                        {children}
+                      </a>
+                    );
+                  },
                 }}
               >
                 {report.markdown}

@@ -27,6 +27,12 @@ class HealthResponse(BaseModel):
     providers: dict[str, Any] | None = None
 
 
+class ReadyResponse(BaseModel):
+    status: str = "ready"
+    service: str = "researchx"
+    checks: dict[str, Any] | None = None
+
+
 class PaginatedResponse(BaseModel, Generic[T]):
     items: list[T]
     total: int

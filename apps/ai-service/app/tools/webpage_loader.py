@@ -1,4 +1,4 @@
-"""HTTP webpage loader with timeout, retries, and size limits."""
+"""HTTP webpage loader with timeout, retries, size limits, and SSRF protections."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import get_settings
 from app.storage.local_store import FileCache
 from app.utils.logging import get_logger
+from app.utils.url_safety import UnsafeURLError, validate_public_http_url
 
 logger = get_logger("researchx.tools.webpage")
 
@@ -29,7 +30,12 @@ class WebpageLoader:
         if self.settings.mock_mode or url.startswith("https://example.com"):
             return self._mock_html(url)
 
-        cached = self.cache.get("html", url)
+        try:
+            safe_url = validate_public_http_url(url)
+        except UnsafeURLError as exc:
+            raise ValueError(f"Blocked URL: {exc}") from exc
+
+        cached = self.cache.get("html", safe_url)
         if cached is not None:
             return str(cached)
 
@@ -38,8 +44,14 @@ class WebpageLoader:
             timeout=self.settings.request_timeout,
             follow_redirects=True,
             headers=headers,
+            max_redirects=5,
         ) as client:
-            resp = client.get(url)
+            resp = client.get(safe_url)
+            # Re-validate final URL after redirects (SSRF via redirect)
+            try:
+                validate_public_http_url(str(resp.url))
+            except UnsafeURLError as exc:
+                raise ValueError(f"Blocked redirect target: {exc}") from exc
             resp.raise_for_status()
             content_type = resp.headers.get("content-type", "")
             if "text" not in content_type and "html" not in content_type and "xml" not in content_type:
@@ -47,7 +59,7 @@ class WebpageLoader:
             text = resp.text
             if len(text) > self.settings.max_content_length:
                 text = text[: self.settings.max_content_length]
-            self.cache.set("html", url, value=text)
+            self.cache.set("html", safe_url, value=text)
             return text
 
     def fetch_safe(self, url: str) -> str:

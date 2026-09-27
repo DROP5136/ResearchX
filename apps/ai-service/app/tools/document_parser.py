@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from app.config import get_settings
 from app.utils.helpers import new_id
 from app.utils.logging import get_logger
 
@@ -26,15 +27,17 @@ class DocumentParser:
         except ImportError as exc:
             raise RuntimeError("PyMuPDF (fitz) is not installed") from exc
 
-        # Basic magic-byte check (PDF header) — do not trust extension alone
         with path.open("rb") as fh:
             header = fh.read(5)
         if header != b"%PDF-":
             raise ValueError("File does not appear to be a valid PDF")
 
         doc_id = (document_id or "").strip() or new_id("DOC")
+        max_pages = max(1, int(get_settings().max_pdf_pages))
         pages: list[dict[str, Any]] = []
         with fitz.open(path) as doc:
+            if len(doc) > max_pages:
+                raise ValueError(f"PDF exceeds maximum of {max_pages} pages")
             for i, page in enumerate(doc):
                 text = page.get_text("text") or ""
                 pages.append(

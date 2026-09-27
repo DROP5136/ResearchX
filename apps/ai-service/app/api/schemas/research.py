@@ -56,7 +56,7 @@ class ResearchCreateRequest(BaseModel):
 
 class ResearchStartResponse(BaseModel):
     research_id: str
-    status: str = "started"
+    status: str = "queued"
 
 
 class ResearchStatusResponse(BaseModel):
@@ -66,6 +66,9 @@ class ResearchStatusResponse(BaseModel):
     progress: int = Field(default=0, ge=0, le=100)
     message: str | None = None
     errors: list[str] = Field(default_factory=list)
+    started_at: str | None = None
+    completed_at: str | None = None
+    retry_count: int = 0
 
 
 class ResearchListItem(BaseModel):

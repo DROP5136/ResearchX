@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.dependencies import get_research_service
+from app.api.dependencies import get_research_service, require_internal_token
 from app.api.schemas.research import (
     ClaimOut,
     ReportOut,
@@ -17,7 +17,11 @@ from app.api.schemas.research import (
 )
 from app.api.services.research_service import ResearchService
 
-router = APIRouter(prefix="/api/v1/research", tags=["research"])
+router = APIRouter(
+    prefix="/api/v1/research",
+    tags=["research"],
+    dependencies=[Depends(require_internal_token)],
+)
 
 
 @router.post(
@@ -25,10 +29,6 @@ router = APIRouter(prefix="/api/v1/research", tags=["research"])
     response_model=ResearchStartResponse,
     status_code=202,
     summary="Start research",
-    description=(
-        "Queue a research job. The existing ResearchX LangGraph pipeline runs in a "
-        "background thread. Poll `/status` then fetch the result."
-    ),
 )
 def start_research(
     body: ResearchCreateRequest,
@@ -38,26 +38,18 @@ def start_research(
     return ResearchStartResponse(**data)
 
 
-@router.get(
-    "",
-    response_model=ResearchListResponse,
-    summary="List research sessions",
-)
+@router.get("", response_model=ResearchListResponse, summary="List research sessions")
 def list_research(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    status: str | None = Query(None, description="Filter by status, e.g. completed"),
+    status: str | None = Query(None),
     service: ResearchService = Depends(get_research_service),
 ) -> ResearchListResponse:
     data = service.list_research(limit=limit, offset=offset, status=status)
     return ResearchListResponse(**data)
 
 
-@router.get(
-    "/{research_id}",
-    response_model=ResearchResultResponse,
-    summary="Get research result",
-)
+@router.get("/{research_id}", response_model=ResearchResultResponse, summary="Get research result")
 def get_research(
     research_id: str,
     service: ResearchService = Depends(get_research_service),
@@ -66,11 +58,7 @@ def get_research(
     return ResearchResultResponse(**data)
 
 
-@router.get(
-    "/{research_id}/status",
-    response_model=ResearchStatusResponse,
-    summary="Get research status",
-)
+@router.get("/{research_id}/status", response_model=ResearchStatusResponse, summary="Get research status")
 def get_status(
     research_id: str,
     service: ResearchService = Depends(get_research_service),
@@ -79,11 +67,16 @@ def get_status(
     return ResearchStatusResponse(**data)
 
 
-@router.get(
-    "/{research_id}/sources",
-    response_model=list[SourceOut],
-    summary="List sources for a research session",
-)
+@router.post("/{research_id}/cancel", response_model=ResearchStatusResponse, summary="Cancel research job")
+def cancel_research(
+    research_id: str,
+    service: ResearchService = Depends(get_research_service),
+) -> ResearchStatusResponse:
+    data = service.cancel_research(research_id)
+    return ResearchStatusResponse(**data)
+
+
+@router.get("/{research_id}/sources", response_model=list[SourceOut], summary="List sources")
 def get_sources(
     research_id: str,
     service: ResearchService = Depends(get_research_service),
@@ -91,11 +84,7 @@ def get_sources(
     return [SourceOut(**row) for row in service.get_sources(research_id)]
 
 
-@router.get(
-    "/{research_id}/claims",
-    response_model=list[ClaimOut],
-    summary="List claims for a research session",
-)
+@router.get("/{research_id}/claims", response_model=list[ClaimOut], summary="List claims")
 def get_claims(
     research_id: str,
     service: ResearchService = Depends(get_research_service),
@@ -103,11 +92,7 @@ def get_claims(
     return [ClaimOut(**row) for row in service.get_claims(research_id)]
 
 
-@router.get(
-    "/{research_id}/report",
-    response_model=ReportOut,
-    summary="Get citation-grounded report",
-)
+@router.get("/{research_id}/report", response_model=ReportOut, summary="Get report")
 def get_report(
     research_id: str,
     service: ResearchService = Depends(get_research_service),

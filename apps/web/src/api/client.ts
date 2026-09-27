@@ -47,6 +47,9 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null);
+    }
     const err = (data as { error?: { code?: string; message?: string; details?: unknown } })?.error;
     throw new ApiError(
       err?.code || "REQUEST_FAILED",

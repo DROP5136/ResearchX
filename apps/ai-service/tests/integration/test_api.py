@@ -51,12 +51,20 @@ def test_health(client: TestClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["service"] == "researchx"
+    assert data["service"] in {"researchx", "researchx-ai"}
     assert "providers" in data
     # secrets must not appear
     dumped = resp.text.lower()
     assert "gsk_" not in dumped
     assert "api_key" not in dumped or "configured" in dumped
+
+
+def test_ready(client: TestClient):
+    resp = client.get("/ready")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ready"
+    assert data["checks"]["redis_optional"] is True
 
 
 def test_invalid_research_request(client: TestClient):
@@ -85,7 +93,7 @@ def test_mock_research_flow(client: TestClient):
     assert start.status_code == 202
     payload = start.json()
     rid = payload["research_id"]
-    assert payload["status"] == "started"
+    assert payload["status"] in {"started", "queued"}
     assert rid.startswith("RES_")
 
     status = _wait_completed(client, rid)
@@ -99,8 +107,16 @@ def test_mock_research_flow(client: TestClient):
     assert data["query"]
     assert isinstance(data.get("sources"), list)
     assert isinstance(data.get("claims"), list)
+    assert isinstance(data.get("evidence"), list)
+    assert isinstance(data.get("contradictions"), list)
+    assert isinstance(data.get("analysis"), list)
+    assert data.get("report") is not None or data.get("status") == "completed"
     meta = data.get("metadata") or {}
     assert "output_dir" not in meta
+    # No secrets in payload
+    dumped = result.text.lower()
+    assert "gsk_" not in dumped
+    assert "api_key" not in dumped or "configured" in dumped
 
     sources = client.get(f"/api/v1/research/{rid}/sources")
     assert sources.status_code == 200

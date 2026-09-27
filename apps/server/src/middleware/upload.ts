@@ -13,12 +13,17 @@ export const uploadPdf = multer({
   fileFilter: (_req, file, cb) => {
     const name = (file.originalname || "").toLowerCase();
     const mime = (file.mimetype || "").toLowerCase();
+    if (!name.endsWith(".pdf")) {
+      cb(new AppError("INVALID_FILE_TYPE", "Only PDF uploads are allowed", 400));
+      return;
+    }
     const okMime =
       mime === "application/pdf" ||
       mime === "application/x-pdf" ||
-      mime === "application/octet-stream";
-    if (!name.endsWith(".pdf") && !okMime) {
-      cb(new AppError("INVALID_FILE_TYPE", "Only PDF uploads are allowed", 400));
+      mime === "application/octet-stream" ||
+      mime === "";
+    if (!okMime) {
+      cb(new AppError("INVALID_MIME", "Unsupported MIME type for PDF upload", 400));
       return;
     }
     cb(null, true);

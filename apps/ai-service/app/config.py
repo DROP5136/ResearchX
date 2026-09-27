@@ -47,12 +47,19 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     serper_api_key: str = ""
 
-    # Pipeline limits
+    # Pipeline limits (free-tier cost controls)
     max_sources: int = 20
     max_research_iterations: int = 2
     max_concurrent_agents: int = 3
+    max_concurrent_research: int = 4
+    max_concurrent_search: int = 5
+    max_concurrent_llm_requests: int = 4
     max_research_time: int = 300
     max_content_length: int = 50_000
+    max_search_queries: int = 20
+    max_chunks: int = 500
+    max_context_size: int = 12_000
+    max_llm_calls: int = 40
     request_timeout: int = 30
 
     # Paths (relative to monorepo root)
@@ -60,6 +67,10 @@ class Settings(BaseSettings):
     cache_path: str = "./data/cache"
     output_path: str = "./data/outputs"
     documents_path: str = "./data/documents"
+
+    # Optional Redis (never required)
+    redis_url: str = ""
+    redis_ttl_seconds: int = 3600
 
     # Mode
     mock_mode: bool = False
@@ -71,6 +82,13 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173"
     app_version: str = "0.1.0"
     app_env: str = "development"
+    # Shared secret for Express → FastAPI (empty = auth disabled, development only)
+    ai_service_token: str = ""
+    # Max concurrent background research jobs in this process
+    max_concurrent_research_jobs: int = 4
+    # Max PDF pages to parse
+    max_pdf_pages: int = 200
+    max_document_pages: int = 200
 
     # Logging
     log_level: str = "INFO"
@@ -87,6 +105,11 @@ class Settings(BaseSettings):
             seen.add(key)
             keys.append(key)
         return keys
+
+    @property
+    def effective_max_concurrent_jobs(self) -> int:
+        """Prefer explicit max_concurrent_research when set via env."""
+        return max(1, int(self.max_concurrent_research or self.max_concurrent_research_jobs or 1))
 
     @property
     def cors_origin_list(self) -> list[str]:

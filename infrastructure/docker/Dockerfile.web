@@ -1,18 +1,26 @@
+# ResearchX web — static SPA
 FROM node:20-alpine AS build
 WORKDIR /repo
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/config/package.json packages/config/
-RUN npm install --workspace=researchx-web --include-workspace-root || npm install
+# Alpine (musl) needs the linux-x64-musl Rollup binary; npm often skips it
+# when the lockfile was generated on Windows (npm/cli#4828).
+RUN npm ci --workspace=researchx-web --include-workspace-root \
+  || npm install --workspace=researchx-web --include-workspace-root
+RUN npm install --no-save --workspace=researchx-web @rollup/rollup-linux-x64-musl \
+  || npm install --no-save @rollup/rollup-linux-x64-musl
 COPY apps/web apps/web
 COPY packages packages
-WORKDIR /repo/apps/web
 ARG VITE_API_URL=http://127.0.0.1:5000
 ENV VITE_API_URL=$VITE_API_URL
-RUN npm run build
+RUN npm run build -w researchx-web
 
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 COPY infrastructure/nginx/web.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://127.0.0.1/ || exit 1
+CMD ["nginx", "-g", "daemon off;"]

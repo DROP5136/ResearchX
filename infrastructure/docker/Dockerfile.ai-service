@@ -1,4 +1,10 @@
-FROM python:3.12-slim
+# ResearchX AI service
+FROM python:3.12-slim AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 appuser
 
 WORKDIR /repo
 
@@ -6,12 +12,18 @@ COPY apps/ai-service/requirements.txt /repo/apps/ai-service/requirements.txt
 RUN pip install --no-cache-dir -r /repo/apps/ai-service/requirements.txt
 
 COPY apps/ai-service /repo/apps/ai-service
-COPY data /repo/data
 COPY evaluation /repo/evaluation
+RUN mkdir -p /repo/data/cache /repo/data/outputs /repo/data/chroma /repo/data/documents \
+    && chown -R appuser:appuser /repo
 
 WORKDIR /repo/apps/ai-service
-ENV PYTHONPATH=/repo/apps/ai-service
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/repo/apps/ai-service \
+    PYTHONUNBUFFERED=1 \
+    APP_ENV=production
 
+USER appuser
 EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+
 CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

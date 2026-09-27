@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.dependencies import require_internal_token
 from app.api.schemas.documents import (
     DocumentDeleteRequest,
     DocumentDeleteResponse,
@@ -12,7 +13,11 @@ from app.api.schemas.documents import (
 )
 from app.api.services.document_service import DocumentService
 
-router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+router = APIRouter(
+    prefix="/api/v1/documents",
+    tags=["documents"],
+    dependencies=[Depends(require_internal_token)],
+)
 _service = DocumentService()
 
 

@@ -1,18 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
-import { getResearch, getResearchStatus } from "@/features/research/api";
+import { getResearch, getResearchStatus, subscribeResearchEvents } from "@/features/research/api";
 import { ErrorState, LoadingState } from "@/components/ui/States";
 import { cn, stageLabel } from "@/lib/utils";
 
 const PIPELINE = [
+  { key: "queued", label: "Queued", desc: "Research job accepted and waiting to start" },
   { key: "planning", label: "Planning", desc: "Decompose the question into research subtasks" },
   { key: "researching", label: "Researching", desc: "Search and retrieve candidate sources" },
-  { key: "extracting_evidence", label: "Extracting Evidence", desc: "Pull claims with verbatim evidence spans" },
-  { key: "fact_checking", label: "Fact Checking", desc: "Verify support and flag weak claims" },
-  { key: "additional_research", label: "Additional Research", desc: "Iterate when evidence is insufficient" },
-  { key: "analyzing", label: "Analysis", desc: "Compute deterministic quantitative metrics" },
+  { key: "extracting_evidence", label: "Collecting evidence", desc: "Pull claims with verbatim evidence spans" },
+  { key: "fact_checking", label: "Fact checking", desc: "Verify support and flag weak claims" },
+  { key: "analyzing", label: "Analyzing", desc: "Compute deterministic quantitative metrics" },
   { key: "writing", label: "Writing", desc: "Compose the citation-grounded report" },
   { key: "completed", label: "Completed", desc: "Artifacts saved and ready to review" },
 ];
@@ -20,30 +20,43 @@ const PIPELINE = [
 function stageIndex(stage?: string | null) {
   if (!stage) return 0;
   const s = stage.toLowerCase();
-  if (s.includes("fail")) return -1;
+  if (s.includes("fail") || s.includes("cancel")) return -1;
+  if (s.includes("queued")) return 0;
   const idx = PIPELINE.findIndex((p) => s.includes(p.key) || p.key.includes(s));
   if (idx >= 0) return idx;
-  if (s.includes("extract")) return 2;
-  if (s.includes("fact")) return 3;
-  if (s.includes("additional") || s.includes("need_more")) return 4;
+  if (s.includes("extract") || s.includes("evidence")) return 3;
+  if (s.includes("fact")) return 4;
+  if (s.includes("additional") || s.includes("need_more")) return 2;
   if (s.includes("analy")) return 5;
   if (s.includes("writ") || s.includes("report")) return 6;
   if (s.includes("complete") || s.includes("save")) return 7;
-  if (s.includes("research") || s.includes("queued")) return 1;
+  if (s.includes("research") || s.includes("plan")) return s.includes("plan") ? 1 : 2;
   return 0;
+}
+
+function formatElapsed(ms?: number | null) {
+  if (ms == null || ms < 0) return null;
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  return `${min}m ${sec % 60}s`;
 }
 
 export function ResearchProgressPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [sseActive, setSseActive] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   const statusQ = useQuery({
     queryKey: ["research-status", id],
     queryFn: () => getResearchStatus(id),
     enabled: Boolean(id),
     refetchInterval: (q) => {
+      if (sseActive) return false;
       const s = q.state.data?.status;
-      return s === "completed" || s === "failed" ? false : 2500;
+      return s === "completed" || s === "failed" || s === "cancelled" ? false : 2500;
     },
   });
 
@@ -52,10 +65,53 @@ export function ResearchProgressPage() {
     queryFn: () => getResearch(id),
     enabled: Boolean(id),
     refetchInterval: (q) => {
+      if (sseActive) return 8000;
       const s = q.state.data?.research?.status;
-      return s === "completed" || s === "failed" ? false : 5000;
+      return s === "completed" || s === "failed" || s === "cancelled" ? false : 5000;
     },
   });
+
+  useEffect(() => {
+    if (!id) return;
+    const unsub = subscribeResearchEvents(id, {
+      onProgress: (data) => {
+        setSseActive(true);
+        setElapsedMs(data.elapsedMs ?? null);
+        queryClient.setQueryData(["research-status", id], {
+          researchId: data.researchId,
+          fastApiResearchId: statusQ.data?.fastApiResearchId || "",
+          status: data.status,
+          currentStage: data.currentStage,
+          progress: data.progress,
+          error: data.error,
+          startedAt: data.startedAt,
+          completedAt: data.completedAt,
+          elapsedMs: data.elapsedMs,
+        });
+      },
+      onDone: (data) => {
+        setSseActive(true);
+        setElapsedMs(data.elapsedMs ?? null);
+        queryClient.setQueryData(["research-status", id], {
+          researchId: data.researchId,
+          fastApiResearchId: statusQ.data?.fastApiResearchId || "",
+          status: data.status,
+          currentStage: data.currentStage,
+          progress: data.progress,
+          error: data.error,
+          startedAt: data.startedAt,
+          completedAt: data.completedAt,
+          elapsedMs: data.elapsedMs,
+        });
+        void queryClient.invalidateQueries({ queryKey: ["research", id] });
+      },
+      onError: () => {
+        setSseActive(false);
+      },
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, queryClient]);
 
   useEffect(() => {
     if (statusQ.data?.status === "completed") {
@@ -69,7 +125,8 @@ export function ResearchProgressPage() {
   const status = statusQ.data!;
   const research = detailQ.data?.research;
   const currentIdx = stageIndex(status.currentStage);
-  const failed = status.status === "failed";
+  const failed = status.status === "failed" || status.status === "cancelled";
+  const elapsed = formatElapsed(elapsedMs ?? status.elapsedMs);
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -82,12 +139,18 @@ export function ResearchProgressPage() {
       <div className="rx-panel p-5">
         <div className="mb-2 flex items-center justify-between text-sm">
           <span className="font-medium">{stageLabel(status.currentStage)}</span>
-          <span className="font-mono text-ink-500">{status.progress}%</span>
+          <span className="font-mono text-ink-500">
+            {status.progress}%{elapsed ? ` · ${elapsed}` : ""}
+          </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
           <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${Math.min(100, status.progress || 0)}%` }} />
         </div>
         {status.error ? <p className="mt-3 text-sm text-rose-600">{status.error}</p> : null}
+        <p className="mt-2 text-xs text-ink-400">
+          Status: {status.status}
+          {sseActive ? " · live updates" : " · polling"}
+        </p>
       </div>
 
       <ol className="space-y-3">

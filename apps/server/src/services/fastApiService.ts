@@ -70,10 +70,14 @@ export class FastApiService {
   private client: AxiosInstance;
 
   constructor(baseURL = env.FASTAPI_URL, timeoutMs = 30_000) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (env.AI_SERVICE_TOKEN) {
+      headers["X-Internal-Token"] = env.AI_SERVICE_TOKEN;
+    }
     this.client = axios.create({
       baseURL: baseURL.replace(/\/$/, ""),
       timeout: timeoutMs,
-      headers: { "Content-Type": "application/json" },
+      headers,
     });
   }
 
@@ -203,6 +207,17 @@ export class FastApiService {
       return data;
     } catch (err) {
       throw mapAxiosError(err, "FASTAPI_DOCUMENT_DELETE_FAILED");
+    }
+  }
+
+  async cancelResearch(fastApiResearchId: string): Promise<FastApiStatusResponse> {
+    try {
+      const { data } = await this.client.post<FastApiStatusResponse>(
+        `/api/v1/research/${encodeURIComponent(fastApiResearchId)}/cancel`
+      );
+      return data;
+    } catch (err) {
+      throw mapAxiosError(err, "FASTAPI_CANCEL_FAILED");
     }
   }
 }

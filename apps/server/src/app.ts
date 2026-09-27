@@ -1,9 +1,12 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
 import { corsOriginList, env } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { globalLimiter } from "./middleware/rateLimits";
+import { requestIdMiddleware } from "./middleware/requestId";
+import { redisConfigured, redisPing, cacheStats } from "./services/redis";
 import authRoutes from "./routes/auth";
 import projectRoutes from "./routes/projects";
 import projectDocumentRoutes from "./routes/projectDocuments";
@@ -16,7 +19,13 @@ export function createApp() {
   const app = express();
 
   app.set("trust proxy", 1);
-  app.use(helmet());
+  app.use(requestIdMiddleware);
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // API-only; frontend is separate origin
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+  );
   app.use(
     cors({
       origin: corsOriginList(),
@@ -24,23 +33,29 @@ export function createApp() {
     })
   );
   app.use(express.json({ limit: "1mb" }));
-  app.use(
-    rateLimit({
-      windowMs: env.RATE_LIMIT_WINDOW_MS,
-      max: env.RATE_LIMIT_MAX,
-      standardHeaders: true,
-      legacyHeaders: false,
-      message: {
-        error: { code: "RATE_LIMITED", message: "Too many requests" },
-      },
-    })
-  );
+  app.use(globalLimiter);
 
   app.get("/health", (_req, res) => {
     res.json({
       status: "ok",
       service: "researchx-server",
       environment: env.NODE_ENV,
+    });
+  });
+
+  app.get("/ready", async (_req, res) => {
+    const mongoOk = mongoose.connection.readyState === 1;
+    const redisOk = redisConfigured() ? await redisPing() : null;
+    const ready = mongoOk;
+    res.status(ready ? 200 : 503).json({
+      status: ready ? "ready" : "not_ready",
+      service: "researchx-server",
+      checks: {
+        mongodb: mongoOk,
+        redis: redisOk,
+        redis_optional: true,
+        cache: cacheStats(),
+      },
     });
   });
 

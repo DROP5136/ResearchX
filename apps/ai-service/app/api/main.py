@@ -6,15 +6,26 @@ Run (from apps/ai-service):
 
 from __future__ import annotations
 
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.errors import register_exception_handlers
 from app.api.routes import documents, evaluation, health, research
 from app.config import get_settings
 from app.utils.logging import setup_logging
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
 
 
 @asynccontextmanager
@@ -25,6 +36,7 @@ async def lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    is_prod = (settings.app_env or "").lower() == "production"
     app = FastAPI(
         title="ResearchX API",
         description=(
@@ -34,12 +46,11 @@ def create_app() -> FastAPI:
         ),
         version=settings.app_version,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
     )
 
     origins = settings.cors_origin_list
-    # Only enable CORS when origins are configured. Explicit "*" is allowed if user sets it.
     if origins:
         app.add_middleware(
             CORSMiddleware,
@@ -49,6 +60,7 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
+    app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(research.router)

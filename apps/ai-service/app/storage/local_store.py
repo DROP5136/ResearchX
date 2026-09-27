@@ -1,4 +1,8 @@
-"""Simple file-based cache and research output store."""
+"""File-based cache (primary) with optional Redis L1 mirror.
+
+Redis is never the only copy of research results — LocalStore remains durable.
+Shared cache keys must not include user PII; callers pass content hashes only.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.storage import redis_client
 from app.utils.helpers import hash_key, utc_now
 from app.utils.logging import get_logger
 
@@ -14,24 +19,36 @@ logger = get_logger("researchx.storage")
 
 
 class FileCache:
-    """JSON file cache under CACHE_PATH."""
+    """JSON file cache under CACHE_PATH, optionally mirrored in Redis."""
 
     def __init__(self, namespace: str = "default"):
         settings = get_settings()
+        self.namespace = namespace
         self.root = settings.cache_dir / namespace
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, key: str) -> Path:
         return self.root / f"{key}.json"
 
+    def _redis_key(self, key: str) -> str:
+        # Namespace + content hash only — no user ids or emails.
+        return f"{self.namespace}:{key}"
+
     def get(self, *parts: str) -> Any | None:
         key = hash_key(*parts)
+        cached = redis_client.cache_get(self._redis_key(key))
+        if cached is not None and isinstance(cached, dict) and "value" in cached:
+            return cached.get("value")
+
         path = self._path(key)
         if not path.exists():
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return data.get("value")
+            value = data.get("value")
+            # Warm Redis from file hit
+            redis_client.cache_set(self._redis_key(key), {"value": value})
+            return value
         except Exception as exc:  # noqa: BLE001
             logger.warning("Cache read failed for %s: %s", key[:12], exc)
             return None
@@ -46,10 +63,11 @@ class FileCache:
             "value": value,
         }
         path.write_text(json.dumps(payload, ensure_ascii=False, default=str), encoding="utf-8")
+        redis_client.cache_set(self._redis_key(key), {"value": value})
         return key
 
     def has(self, *parts: str) -> bool:
-        return self._path(hash_key(*parts)).exists()
+        return self.get(*parts) is not None
 
 
 class LocalStore:
