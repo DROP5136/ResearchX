@@ -45,10 +45,12 @@ Open http://127.0.0.1:5173 → New research → leave **Mock mode** off → run 
 |--------|--------|
 | `GROQ_API_KEY` (+ `_2`, `_3`) | your Groq keys |
 | `TAVILY_API_KEY` / `SERPER_API_KEY` | search keys (or leave blank and set `SEARCH_PROVIDER=duckduckgo` in the dashboard) |
-| `MONGODB_URI` | Atlas URI with DB `researchx` |
+| `MONGODB_URI` | Atlas URI with DB `researchx` (**required** — API will crash without it) |
 | `CORS_ORIGINS` | `https://researchx-web.onrender.com` (final web URL) |
 | `CORS_ORIGIN` | same web URL |
 | `VITE_API_URL` | `https://researchx-api.onrender.com` |
+
+If the API logs say `MONGODB_URI: Required`, open **researchx-api → Environment**, paste your Atlas connection string, and redeploy.
 
 `AI_SERVICE_TOKEN` and `JWT_SECRET` are auto-generated. Express gets the AI hostname via `fromService` and prefixes `https://` automatically.
 

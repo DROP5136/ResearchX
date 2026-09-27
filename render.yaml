@@ -82,6 +82,8 @@ services:
     healthCheckPath: /health
     envVars:
       - fromGroup: researchx-shared
+      - key: NODE_VERSION
+        value: "22.14.0"
       - key: NODE_ENV
         value: production
       - key: HOST
@@ -110,12 +112,14 @@ services:
   - type: web
     name: researchx-web
     runtime: static
-    buildCommand: npm ci --include=dev && npm run build -w researchx-web
+    buildCommand: npm ci --include=dev && npm install --no-save @rollup/rollup-linux-x64-gnu && npm run build -w researchx-web
     staticPublishPath: ./apps/web/dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: "22.14.0"
       - key: VITE_API_URL
         sync: false
