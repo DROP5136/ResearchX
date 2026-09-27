@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "name": "researchx",
+  "version": "0.1.0",
+  "description": "ResearchX monorepo — web, server, and AI service",
+  "workspaces": [
+    "apps/server",
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w researchx-web",
+    "dev:server": "npm run dev -w researchx-server",
+    "dev:ai": "cd apps/ai-service && ../../.venv/Scripts/python.exe -m uvicorn app.api.main:app --reload --host 127.0.0.1 --port 8000",
+    "build": "npm run build -w researchx-server && npm run build -w researchx-web",
+    "test": "npm run test -w researchx-server && npm run test -w researchx-web",
+    "test:server": "npm run test -w researchx-server",
+    "test:web": "npm run test -w researchx-web",
+    "test:ai": "cd apps/ai-service && ../../.venv/Scripts/python.exe -m pytest -q",
+    "lint": "npm run lint -w researchx-server && npm run lint -w researchx-web",
+    "install:ai": "cd apps/ai-service && ../../.venv/Scripts/pip.exe install -r requirements.txt"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

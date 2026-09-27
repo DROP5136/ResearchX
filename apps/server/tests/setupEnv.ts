@@ -1,0 +1,9 @@
+process.env.NODE_ENV = "test";
+process.env.PORT = "5001";
+process.env.MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/researchx-test";
+process.env.JWT_SECRET = "test-jwt-secret-key-32chars!!";
+process.env.JWT_EXPIRES_IN = "1h";
+process.env.FASTAPI_URL = "http://127.0.0.1:8000";
+process.env.CORS_ORIGIN = "http://localhost:5173";
+process.env.RATE_LIMIT_WINDOW_MS = "900000";
+process.env.RATE_LIMIT_MAX = "1000";

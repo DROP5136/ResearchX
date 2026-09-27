@@ -1,0 +1,104 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply font-sans text-ink-900 antialiased dark:text-ink-100;
+  background-image: theme("backgroundImage.atmosphere-light");
+  background-attachment: fixed;
+}
+
+.dark body,
+body:where(.dark *) {
+  background-image: theme("backgroundImage.atmosphere-dark");
+}
+
+@layer components {
+  .rx-panel {
+    @apply rounded-2xl border border-ink-200/80 bg-white/80 shadow-panel backdrop-blur-sm dark:border-ink-700/80 dark:bg-ink-900/70;
+  }
+
+  .rx-input {
+    @apply w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-sm text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-accent focus:ring-2 focus:ring-accent/20 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100;
+  }
+
+  .rx-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .rx-btn-primary {
+    @apply rx-btn bg-accent text-white hover:bg-accent-muted;
+  }
+
+  .rx-btn-secondary {
+    @apply rx-btn border border-ink-200 bg-white text-ink-800 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100 dark:hover:bg-ink-800;
+  }
+
+  .rx-btn-ghost {
+    @apply rx-btn text-ink-600 hover:bg-ink-100/80 dark:text-ink-300 dark:hover:bg-ink-800/80;
+  }
+
+  .rx-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-ink-500 dark:text-ink-400;
+  }
+}
+
+/* Markdown report */
+.rx-prose h1,
+.rx-prose h2,
+.rx-prose h3 {
+  @apply font-display font-semibold text-ink-950 dark:text-white;
+}
+.rx-prose h1 {
+  @apply mb-4 mt-2 text-3xl;
+}
+.rx-prose h2 {
+  @apply mb-3 mt-8 text-2xl;
+}
+.rx-prose h3 {
+  @apply mb-2 mt-6 text-xl;
+}
+.rx-prose p {
+  @apply mb-4 leading-7 text-ink-700 dark:text-ink-200;
+}
+.rx-prose ul {
+  @apply mb-4 list-disc space-y-1 pl-5 text-ink-700 dark:text-ink-200;
+}
+.rx-prose ol {
+  @apply mb-4 list-decimal space-y-1 pl-5 text-ink-700 dark:text-ink-200;
+}
+.rx-prose a {
+  @apply text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent;
+}
+.rx-prose table {
+  @apply mb-6 w-full overflow-hidden rounded-xl border border-ink-200 text-sm dark:border-ink-700;
+}
+.rx-prose th,
+.rx-prose td {
+  @apply border-b border-ink-200 px-3 py-2 text-left dark:border-ink-700;
+}
+.rx-prose th {
+  @apply bg-ink-50 font-semibold dark:bg-ink-800;
+}
+.rx-prose code {
+  @apply rounded bg-ink-100 px-1.5 py-0.5 font-mono text-[0.85em] dark:bg-ink-800;
+}
+.rx-prose blockquote {
+  @apply my-4 border-l-4 border-accent/40 pl-4 text-ink-600 italic dark:text-ink-300;
+}

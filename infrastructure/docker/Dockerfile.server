@@ -1,0 +1,20 @@
+FROM node:20-alpine AS build
+WORKDIR /repo
+COPY package.json package-lock.json* ./
+COPY apps/server/package.json apps/server/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/config/package.json packages/config/
+RUN npm install --workspace=researchx-server --include-workspace-root=false || npm install
+COPY apps/server apps/server
+COPY packages packages
+WORKDIR /repo/apps/server
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=build /repo/apps/server/dist ./dist
+COPY --from=build /repo/apps/server/package.json ./
+COPY --from=build /repo/node_modules ./node_modules
+ENV NODE_ENV=production
+EXPOSE 5000
+CMD ["node", "dist/server.js"]

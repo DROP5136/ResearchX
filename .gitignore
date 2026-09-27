@@ -1,8 +1,10 @@
-# Environment
+# Environment — never commit secrets
 .env
 .env.local
-.env.example
-*.env
+.env.*.local
+*.pem
+!.env.example
+!apps/*/.env.example
 
 # Python
 __pycache__/
@@ -30,6 +32,12 @@ venv/
 ENV/
 env/
 
+# Node
+node_modules/
+**/dist/
+**/coverage/
+*.tsbuildinfo
+
 # IDE
 .idea/
 .vscode/
@@ -50,10 +58,14 @@ data/cache/*
 data/outputs/*
 data/documents/*
 data/chroma/*
-!data/cache/.gitkeep
-!data/outputs/.gitkeep
-!data/documents/.gitkeep
-!data/chroma/.gitkeep
+data/raw/*
+data/processed/*
+!data/**/.gitkeep
+
+# Evaluation results (keep structure)
+evaluation/results/*
+!evaluation/results/.gitkeep
+!evaluation/results/.gitignore
 
 # OS
 .DS_Store

@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+
+WORKDIR /repo
+
+COPY apps/ai-service/requirements.txt /repo/apps/ai-service/requirements.txt
+RUN pip install --no-cache-dir -r /repo/apps/ai-service/requirements.txt
+
+COPY apps/ai-service /repo/apps/ai-service
+COPY data /repo/data
+COPY evaluation /repo/evaluation
+
+WORKDIR /repo/apps/ai-service
+ENV PYTHONPATH=/repo/apps/ai-service
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
