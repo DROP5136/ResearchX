@@ -77,7 +77,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm ci && npm run build -w researchx-server
+    buildCommand: npm ci --include=dev && npm run build -w researchx-server
     startCommand: npm start -w researchx-server
     healthCheckPath: /health
     envVars:
@@ -110,7 +110,7 @@ services:
   - type: web
     name: researchx-web
     runtime: static
-    buildCommand: npm ci && npm run build -w researchx-web
+    buildCommand: npm ci --include=dev && npm run build -w researchx-web
     staticPublishPath: ./apps/web/dist
     routes:
       - type: rewrite
