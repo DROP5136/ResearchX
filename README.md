@@ -55,10 +55,18 @@ cd "c:\GENAI PROJECT\researchx-ai"
 .\.venv\Scripts\Activate.ps1
 pip install -r apps\ai-service\requirements.txt
 npm install
-copy .env.example .env
 ```
 
-Also keep `apps/server/.env` and `apps/web/.env` configured (see `.env.example`).
+Create a root `.env` (and `apps/server/.env` / `apps/web/.env` as needed) with Mongo URI and provider keys. See `docs/deployment.md` for production values. **Do not commit `.env` files.**
+
+For a live Groq demo, set:
+
+```
+LLM_PROVIDER=groq
+LLM_MODEL=openai/gpt-oss-20b
+MOCK_MODE=false
+GROQ_API_KEY=...
+```
 
 ## Run
 

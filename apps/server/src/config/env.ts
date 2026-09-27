@@ -14,7 +14,7 @@ const envSchema = z.object({
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
-  FASTAPI_URL: z.string().url().default("http://127.0.0.1:8000"),
+  FASTAPI_URL: z.string().min(1).default("http://127.0.0.1:8000"),
   AI_SERVICE_TOKEN: z.string().default(""),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   REDIS_URL: z.string().default(""),
@@ -52,6 +52,19 @@ function loadEnv(): Env {
     throw new Error(`Invalid environment configuration: ${msg}`);
   }
   const data = parsed.data;
+  // Render fromService "host" is hostname-only; normalize to an absolute URL.
+  const rawFastapi = (data.FASTAPI_URL || "").trim();
+  if (rawFastapi && !/^https?:\/\//i.test(rawFastapi)) {
+    data.FASTAPI_URL = `https://${rawFastapi.replace(/\/$/, "")}`;
+  } else {
+    data.FASTAPI_URL = rawFastapi.replace(/\/$/, "");
+  }
+  try {
+    // eslint-disable-next-line no-new
+    new URL(data.FASTAPI_URL);
+  } catch {
+    throw new Error(`FASTAPI_URL is not a valid URL: ${data.FASTAPI_URL}`);
+  }
   if (!path.isAbsolute(data.DOCUMENTS_PATH)) {
     data.DOCUMENTS_PATH = path.resolve(REPO_ROOT, data.DOCUMENTS_PATH);
   }

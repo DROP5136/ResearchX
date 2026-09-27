@@ -9,7 +9,6 @@ venv
 **/coverage
 **/.env
 **/.env.*
-!**/.env.example
 data/cache
 data/outputs
 data/chroma

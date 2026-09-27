@@ -1,31 +1,52 @@
-# ResearchX — Render Blueprint (free-tier friendly)
-# Dashboard: New → Blueprint → connect this repo
-# After first deploy, set secret env values in the Render UI (sync: false).
+# ResearchX Render Blueprint
+# Dashboard → New → Blueprint → this repo
+# Paste secrets when prompted (sync: false). Never commit API keys.
 
 previewsEnabled: false
 
+envVarGroups:
+  - name: researchx-shared
+    envVars:
+      - key: AI_SERVICE_TOKEN
+        generateValue: true
+
 services:
-  # ── FastAPI / LangGraph ─────────────────────────────────
+  # ── AI (FastAPI + Groq) ─────────────────────────────────
+  # Native Python (free plan). Reads $PORT via app.api.run_prod.
   - type: web
     name: researchx-ai
     runtime: python
     plan: free
+    region: oregon
     rootDir: apps/ai-service
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.api.run_prod
     healthCheckPath: /health
     envVars:
-      - key: APP_ENV
-        value: production
+      - fromGroup: researchx-shared
       - key: PYTHON_VERSION
         value: "3.12.8"
+      - key: APP_ENV
+        value: production
       - key: MOCK_MODE
-        value: "true"
+        value: "false"
       - key: LLM_PROVIDER
-        value: mock
+        value: groq
+      - key: LLM_MODEL
+        value: openai/gpt-oss-20b
       - key: SEARCH_PROVIDER
+        value: tavily
+      - key: SEARCH_FALLBACK
         value: duckduckgo
-      - key: AI_SERVICE_TOKEN
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY_3
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
         sync: false
       - key: CORS_ORIGINS
         sync: false
@@ -41,55 +62,56 @@ services:
         value: "10"
       - key: MAX_RESEARCH_ITERATIONS
         value: "1"
+      - key: MAX_CONCURRENT_AGENTS
+        value: "2"
       - key: MAX_CONCURRENT_RESEARCH
         value: "1"
       - key: MAX_CONCURRENT_RESEARCH_JOBS
         value: "1"
-      - key: REDIS_URL
-        value: ""
+      - key: MAX_LLM_CALLS
+        value: "30"
 
   # ── Express API ─────────────────────────────────────────
   - type: web
     name: researchx-api
     runtime: node
     plan: free
-    rootDir: .
-    buildCommand: npm install && npm run build -w researchx-server
+    region: oregon
+    buildCommand: npm ci && npm run build -w researchx-server
     startCommand: npm start -w researchx-server
     healthCheckPath: /health
     envVars:
+      - fromGroup: researchx-shared
       - key: NODE_ENV
         value: production
       - key: HOST
-        value: 0.0.0.0
+        value: "0.0.0.0"
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: FASTAPI_URL
-        sync: false
-      - key: AI_SERVICE_TOKEN
-        sync: false
+        fromService:
+          name: researchx-ai
+          type: web
+          property: host
       - key: CORS_ORIGIN
         sync: false
       - key: ALLOW_MOCK_MODE
         value: "true"
       - key: ALLOW_EVALUATION
         value: "false"
-      - key: REDIS_URL
-        value: ""
       - key: DOCUMENTS_PATH
         value: ./data/documents
 
-  # ── React static site ───────────────────────────────────
+  # ── React SPA ───────────────────────────────────────────
   - type: web
     name: researchx-web
     runtime: static
-    rootDir: .
-    buildCommand: npm install && npm run build -w researchx-web
-    staticPublishPath: apps/web/dist
+    buildCommand: npm ci && npm run build -w researchx-web
+    staticPublishPath: ./apps/web/dist
     routes:
       - type: rewrite
         source: /*

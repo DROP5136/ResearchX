@@ -25,7 +25,7 @@ export function NewResearchPage() {
   const [enablePdf, setEnablePdf] = useState(false);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [enableAnalysis, setEnableAnalysis] = useState(true);
-  const [mockMode, setMockMode] = useState(true);
+  const [mockMode, setMockMode] = useState(false);
   const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
 
   const projects = projectsQ.data?.items || [];
@@ -196,7 +196,7 @@ export function NewResearchPage() {
         <fieldset className="grid gap-3 sm:grid-cols-2">
           <legend className="rx-label">Options</legend>
           <Toggle label="Enable quantitative analysis" checked={enableAnalysis} onChange={setEnableAnalysis} />
-          <Toggle label="Mock mode (offline / no paid APIs)" checked={mockMode} onChange={setMockMode} />
+          <Toggle label="Mock mode (skip Groq / live APIs)" checked={mockMode} onChange={setMockMode} />
         </fieldset>
 
         <button type="submit" className="rx-btn-primary w-full sm:w-auto" disabled={mutation.isPending}>

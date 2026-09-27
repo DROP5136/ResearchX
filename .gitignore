@@ -2,9 +2,9 @@
 .env
 .env.local
 .env.*.local
+.env.example
+**/.env.example
 *.pem
-# Keep root .env.example tracked (no secrets). Ignore copies under apps/.
-apps/**/.env.example
 
 # Python
 __pycache__/

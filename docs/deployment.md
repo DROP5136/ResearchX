@@ -1,148 +1,69 @@
-# Deployment
+# Deployment (Render + Atlas + Groq)
 
-ResearchX deploys as three services + MongoDB. Redis is optional (leave empty).
+## Stack
 
-**Recommended free stack:** MongoDB Atlas (M0) + Render (AI + API + static web).
+| Piece | Where |
+|-------|--------|
+| MongoDB | Atlas M0 (free) |
+| AI (FastAPI + Groq) | Render web service `researchx-ai` (Python) |
+| Express | Render web service `researchx-api` |
+| React | Render static site `researchx-web` |
 
-Keep MongoDB private credentials in the platform dashboard. Protect FastAPI with `AI_SERVICE_TOKEN` (Express is the public API).
+Blueprint: `render.yaml`. **Never put API keys in git** — paste them when Render prompts for `sync: false` values.
 
 ---
 
-## 1. Push to GitHub
+## Local Groq demo (paid models)
 
-Commit and push `researchx-ai` to a GitHub repo.
+Your root `.env` / `apps/ai-service/.env` should have:
 
----
-
-## 2. MongoDB Atlas (free)
-
-1. Create an M0 cluster
-2. Database user + password
-3. Network Access → `0.0.0.0/0`
-4. Copy connection string → use database name `researchx`
-
-Example:
-
-```text
-mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/researchx?retryWrites=true&w=majority
+```
+LLM_PROVIDER=groq
+LLM_MODEL=openai/gpt-oss-20b
+MOCK_MODE=false
+GROQ_API_KEY=...
+GROQ_API_KEY_2=...   # optional failover
+GROQ_API_KEY_3=...
+SEARCH_PROVIDER=tavily
 ```
 
+```powershell
+npm run dev
+```
+
+Open http://127.0.0.1:5173 → New research → leave **Mock mode** off → run a query. Progress + report use live Groq.
+
 ---
 
-## 3. Deploy with Render Blueprint
+## Render Blueprint
 
-1. Open [Render](https://dashboard.render.com) → **New** → **Blueprint**
-2. Connect the GitHub repo (file `render.yaml` at repo root)
-3. Create the blueprint
-4. In the dashboard, set these **secret / sync:false** values:
+1. Push this repo to GitHub  
+2. Render → **New → Blueprint** → select the repo  
+3. When prompted, paste from your local `.env` (do not commit these):
 
-### researchx-ai
-
-| Key | Value |
-|-----|--------|
-| `AI_SERVICE_TOKEN` | long random shared secret |
-| `CORS_ORIGINS` | `https://researchx-web.onrender.com` (your static URL after it exists) |
-
-### researchx-api
-
-| Key | Value |
-|-----|--------|
-| `MONGODB_URI` | Atlas URI |
-| `JWT_SECRET` | ≥24 random characters |
-| `AI_SERVICE_TOKEN` | **same** as AI service |
-| `FASTAPI_URL` | `https://researchx-ai.onrender.com` (no trailing slash) |
-| `CORS_ORIGIN` | `https://researchx-web.onrender.com` |
-
-### researchx-web
-
-| Key | Value |
-|-----|--------|
+| Prompt | Value |
+|--------|--------|
+| `GROQ_API_KEY` (+ `_2`, `_3`) | your Groq keys |
+| `TAVILY_API_KEY` / `SERPER_API_KEY` | search keys (or leave blank and set `SEARCH_PROVIDER=duckduckgo` in the dashboard) |
+| `MONGODB_URI` | Atlas URI with DB `researchx` |
+| `CORS_ORIGINS` | `https://researchx-web.onrender.com` (final web URL) |
+| `CORS_ORIGIN` | same web URL |
 | `VITE_API_URL` | `https://researchx-api.onrender.com` |
 
-5. Redeploy **web** after `VITE_API_URL` is set (it is baked into the JS bundle).
-6. Redeploy **api** / **ai** after CORS URLs match the final web hostname.
+`AI_SERVICE_TOKEN` and `JWT_SECRET` are auto-generated. Express gets the AI hostname via `fromService` and prefixes `https://` automatically.
 
-### Manual create (if not using Blueprint)
+4. After first deploy, confirm URLs, update CORS if needed, then **Clear build cache + deploy** on the web service so `VITE_API_URL` is baked into the SPA.
 
-| Service | Type | Build | Start / publish |
-|---------|------|-------|-----------------|
-| AI | Web / Python | `pip install -r requirements.txt` (root `apps/ai-service`) | `python -m app.api.run_prod` |
-| API | Web / Node | `npm install && npm run build -w researchx-server` | `npm start -w researchx-server` |
-| Web | Static | `npm install && npm run build -w researchx-web` | publish `apps/web/dist` + SPA rewrite `/* → /index.html` |
+Defaults in the Blueprint: `MOCK_MODE=false`, `LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-20b`.
 
 ---
 
-## 4. Verify
+## Atlas
 
-```text
-https://researchx-ai.onrender.com/health
-https://researchx-api.onrender.com/health
-https://researchx-api.onrender.com/ready
-https://researchx-web.onrender.com
-```
-
-Then: register → project → research (mock mode) → report.
-
-First hit after idle can take 30–60s (free instances sleep).
+Free M0 cluster → Network Access `0.0.0.0/0` → Database user → connection string with `/researchx`.
 
 ---
 
-## Environment reference
+## Cold starts
 
-**Express (`researchx-api`)**
-
-- `NODE_ENV=production`
-- `HOST=0.0.0.0`
-- `MONGODB_URI`, `JWT_SECRET`, `FASTAPI_URL`, `AI_SERVICE_TOKEN`, `CORS_ORIGIN`
-- `ALLOW_MOCK_MODE=true` for demos without paid LLMs
-- `REDIS_URL=` (empty)
-- `DOCUMENTS_PATH=./data/documents` (ephemeral on free tier)
-
-**AI (`researchx-ai`)**
-
-- `APP_ENV=production`
-- `AI_SERVICE_TOKEN` (must match Express)
-- `MOCK_MODE=true`, `LLM_PROVIDER=mock`, `SEARCH_PROVIDER=duckduckgo`
-- Or live: `MOCK_MODE=false`, `LLM_PROVIDER=groq`, `GROQ_API_KEY=...`
-- Keep `MAX_*` low on free RAM
-
-**Web**
-
-- `VITE_API_URL` = public Express URL (build-time only)
-
----
-
-## Local production-like check
-
-```powershell
-cd "c:\GENAI PROJECT\researchx-ai"
-$env:NODE_ENV="production"
-$env:AI_SERVICE_TOKEN="test-token-change-me-now"
-$env:JWT_SECRET="local-prod-secret-at-least-24c"
-$env:MONGODB_URI="mongodb://127.0.0.1:27017/researchx"
-$env:FASTAPI_URL="http://127.0.0.1:8000"
-$env:CORS_ORIGIN="http://127.0.0.1:4173"
-npm run build
-npm start -w researchx-server
-```
-
-AI:
-
-```powershell
-cd apps\ai-service
-$env:APP_ENV="production"
-$env:AI_SERVICE_TOKEN="test-token-change-me-now"
-$env:MOCK_MODE="true"
-..\..\.venv\Scripts\python.exe -m app.api.run_prod
-```
-
----
-
-## Limits on free hosting
-
-- Services sleep after idle → cold starts
-- No persistent disk → uploaded PDFs may disappear after restart
-- ~512MB RAM → keep concurrency limits low; prefer mock mode for demos
-- Atlas free tier storage/connection limits apply
-
-Redis is not required. Do not enable Kafka or Kubernetes.
+Free Render services sleep after idle. First hit can take ~1 minute.

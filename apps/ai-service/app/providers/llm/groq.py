@@ -124,7 +124,12 @@ class GroqProvider(LLMProvider):
                 resp = client.post(GROQ_API_URL, json=payload, headers=headers)
                 if resp.status_code < 400:
                     data = resp.json()
-                    content = data["choices"][0]["message"]["content"]
+                    message = (data.get("choices") or [{}])[0].get("message") or {}
+                    # gpt-oss models may fill `reasoning` first; content can be empty
+                    # when max_tokens is too low for both reasoning + answer.
+                    content = (message.get("content") or "").strip()
+                    if not content:
+                        content = (message.get("reasoning") or "").strip()
                     return LLMResponse(
                         content=content,
                         model=self.model,
